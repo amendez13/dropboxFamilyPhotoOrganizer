@@ -3,19 +3,24 @@ Test script to verify Dropbox API connection and configuration.
 """
 
 import sys
+import os
 import logging
 import yaml
-from dropbox_client import DropboxClient
+
+# Add parent directory to path to import modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from scripts.dropbox_client import DropboxClient
 
 
-def load_config(config_path: str = "config.yaml") -> dict:
+def load_config(config_path: str = "config/config.yaml") -> dict:
     """Load configuration from YAML file."""
     try:
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         print(f"Error: Configuration file '{config_path}' not found.")
-        print("Please copy config.example.yaml to config.yaml and fill in your settings.")
+        print("Please copy config/config.example.yaml to config/config.yaml and fill in your settings.")
         sys.exit(1)
     except yaml.YAMLError as e:
         print(f"Error parsing configuration file: {e}")
@@ -46,8 +51,8 @@ def main():
 
     # Validate configuration
     if access_token == "YOUR_DROPBOX_ACCESS_TOKEN_HERE":
-        print("\nError: Please update config.yaml with your Dropbox access token.")
-        print("See DROPBOX_SETUP.md for instructions.")
+        print("\nError: Please update config/config.yaml with your Dropbox access token.")
+        print("See docs/DROPBOX_SETUP.md for instructions.")
         sys.exit(1)
 
     # Initialize Dropbox client
@@ -60,7 +65,7 @@ def main():
         print("✓ Successfully connected to Dropbox")
     else:
         print("✗ Failed to connect to Dropbox")
-        print("  Please check your access token in config.yaml")
+        print("  Please check your access token in config/config.yaml")
         sys.exit(1)
 
     # Test 2: List files in source folder
@@ -118,7 +123,7 @@ def main():
     print("=" * 60)
     print("\nNext steps:")
     print("  1. Add reference photos to the 'reference_photos/' directory")
-    print("  2. Update face_recognition settings in config.yaml")
+    print("  2. Update face_recognition settings in config/config.yaml")
     print("  3. Run the main photo organizer script")
     print()
 

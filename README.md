@@ -15,7 +15,7 @@ Automatically scan your Dropbox photos, detect a specific person using face reco
 
 ### 1. Setup Dropbox API
 
-Follow the detailed instructions in [DROPBOX_SETUP.md](DROPBOX_SETUP.md) to:
+Follow the detailed instructions in [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) to:
 - Create a Dropbox app
 - Configure permissions
 - Generate an access token
@@ -24,7 +24,7 @@ Follow the detailed instructions in [DROPBOX_SETUP.md](DROPBOX_SETUP.md) to:
 
 ```bash
 # Create a virtual environment (recommended)
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install required packages
@@ -35,9 +35,9 @@ pip install -r requirements.txt
 
 ```bash
 # Copy the example configuration
-cp config.example.yaml config.yaml
+cp config/config.example.yaml config/config.yaml
 
-# Edit config.yaml with your settings
+# Edit config/config.yaml with your settings
 # - Add your Dropbox access token
 # - Set source and destination folder paths
 # - Configure face recognition settings
@@ -46,7 +46,7 @@ cp config.example.yaml config.yaml
 ### 4. Test the Connection
 
 ```bash
-python test_dropbox_connection.py
+python scripts/test_dropbox_connection.py
 ```
 
 This will verify:
@@ -56,7 +56,7 @@ This will verify:
 
 ## Configuration
 
-All settings are managed in `config.yaml`:
+All settings are managed in `config/config.yaml`:
 
 ```yaml
 dropbox:
@@ -88,12 +88,18 @@ processing:
 
 ```
 dropboxFamilyPhotoOrganizer/
-├── config.yaml              # Your configuration (gitignored)
-├── config.example.yaml      # Configuration template
-├── dropbox_client.py        # Dropbox API client
-├── test_dropbox_connection.py  # Connection test script
+├── config/
+│   ├── config.yaml          # Your configuration (gitignored)
+│   └── config.example.yaml  # Configuration template
+├── docs/
+│   └── DROPBOX_SETUP.md    # Detailed setup instructions
+├── scripts/
+│   ├── dropbox_client.py   # Dropbox API client
+│   ├── test_dropbox_connection.py  # Connection test script
+│   ├── check_account.py    # Account verification utility
+│   └── list_folders.py     # Folder listing utility
 ├── requirements.txt         # Python dependencies
-├── DROPBOX_SETUP.md        # Detailed setup instructions
+├── CLAUDE.md               # Claude Code guidance
 └── README.md               # This file
 ```
 
@@ -102,23 +108,23 @@ dropboxFamilyPhotoOrganizer/
 ### Test Dropbox Connection
 
 ```bash
-python test_dropbox_connection.py
+python scripts/test_dropbox_connection.py
 ```
 
 ### Run Photo Organizer (Coming Soon)
 
 ```bash
 # Dry run (preview matches without moving)
-python organize_photos.py
+python scripts/organize_photos.py
 
-# Actually move files (set dry_run: false in config.yaml)
-python organize_photos.py
+# Actually move files (set dry_run: false in config/config.yaml)
+python scripts/organize_photos.py
 ```
 
 ## Security Notes
 
-- **Never commit `config.yaml`** - it contains your access token
-- The `.gitignore` file excludes `config.yaml` by default
+- **Never commit `config/config.yaml`** - it contains your access token
+- The `.gitignore` file excludes `config/config.yaml` by default
 - Access tokens provide full access to your Dropbox - keep them secure
 - Consider using environment variables for sensitive data in production
 
@@ -142,7 +148,7 @@ python organize_photos.py
 - Check folder exists in Dropbox
 - Paths are case-sensitive
 
-See [DROPBOX_SETUP.md](DROPBOX_SETUP.md) for more troubleshooting tips.
+See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for more troubleshooting tips.
 
 ## Development Status
 

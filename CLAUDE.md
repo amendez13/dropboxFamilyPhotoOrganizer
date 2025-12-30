@@ -49,8 +49,8 @@ source venv/bin/activate  # On macOS/Linux
 pip install -r requirements.txt
 
 # Copy and configure settings
-cp config.example.yaml config.yaml
-# Edit config.yaml with your Dropbox access token and folder paths
+cp config/config.example.yaml config/config.yaml
+# Edit config/config.yaml with your Dropbox access token and folder paths
 ```
 
 ### Running the Test Script
@@ -60,7 +60,7 @@ cp config.example.yaml config.yaml
 source venv/bin/activate
 
 # Run Dropbox connection test
-python test_dropbox_connection.py
+python scripts/test_dropbox_connection.py
 ```
 
 ### Common Commands
@@ -71,6 +71,12 @@ source venv/bin/activate
 
 # Update dependencies
 pip install --upgrade -r requirements.txt
+
+# Check account details
+python scripts/check_account.py
+
+# List Dropbox folders
+python scripts/list_folders.py
 
 # Deactivate virtual environment when done
 deactivate
@@ -83,5 +89,5 @@ deactivate
 source venv/bin/activate
 
 # Run photo organizer
-python organize_photos.py
+python scripts/organize_photos.py
 ```

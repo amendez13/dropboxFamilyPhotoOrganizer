@@ -1,5 +1,5 @@
 # Config files with sensitive data
-config.yaml
+config/config.yaml
 
 # Reference photos
 reference_photos/
