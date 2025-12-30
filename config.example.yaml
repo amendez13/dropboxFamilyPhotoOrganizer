@@ -1,0 +1,39 @@
+# Dropbox Photo Organizer Configuration
+# Copy this file to config.yaml and fill in your values
+
+dropbox:
+  # Your Dropbox app access token (see DROPBOX_SETUP.md for instructions)
+  access_token: "YOUR_DROPBOX_ACCESS_TOKEN_HERE"
+
+  # Source folder path in Dropbox (e.g., "/Photos/Family" or "/Camera Uploads")
+  source_folder: "/path/to/source/folder"
+
+  # Destination folder for photos with the target person
+  destination_folder: "/path/to/destination/folder"
+
+face_recognition:
+  # Path to reference photos of the person to detect (local directory)
+  reference_photos_dir: "./reference_photos"
+
+  # Face matching tolerance (lower = more strict, typical range: 0.4-0.6)
+  tolerance: 0.6
+
+  # Thumbnail size for faster processing (width x height)
+  thumbnail_size: "w256h256"
+
+processing:
+  # Enable dry run mode (list matches without moving files)
+  dry_run: true
+
+  # Batch size for processing photos
+  batch_size: 50
+
+  # Supported image extensions
+  image_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .heic
+
+  # Enable verbose logging
+  verbose: true
