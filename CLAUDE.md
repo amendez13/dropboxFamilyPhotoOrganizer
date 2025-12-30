@@ -35,4 +35,53 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
 
 ## Development Commands
 
-*To be added once the project is initialized with a package manager and build tools.*
+### Initial Setup
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # On macOS/Linux
+# venv\Scripts\activate   # On Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy and configure settings
+cp config.example.yaml config.yaml
+# Edit config.yaml with your Dropbox access token and folder paths
+```
+
+### Running the Test Script
+
+```bash
+# Activate virtual environment (if not already active)
+source venv/bin/activate
+
+# Run Dropbox connection test
+python test_dropbox_connection.py
+```
+
+### Common Commands
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Update dependencies
+pip install --upgrade -r requirements.txt
+
+# Deactivate virtual environment when done
+deactivate
+```
+
+### Running the Main Script (Future)
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run photo organizer
+python organize_photos.py
+```
