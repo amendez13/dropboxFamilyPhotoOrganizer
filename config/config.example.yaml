@@ -12,6 +12,12 @@ dropbox:
   destination_folder: "/path/to/destination/folder"
 
 face_recognition:
+  # Provider to use: 'local', 'aws', or 'azure'
+  # - local: Uses face_recognition library (dlib), runs offline, free
+  # - aws: Uses AWS Rekognition (requires AWS account, API costs)
+  # - azure: Uses Azure Face API (requires Azure account, API costs)
+  provider: "local"
+
   # Path to reference photos of the person to detect (local directory)
   reference_photos_dir: "./reference_photos"
 
@@ -20,6 +26,28 @@ face_recognition:
 
   # Thumbnail size for faster processing (width x height)
   thumbnail_size: "w256h256"
+
+  # Provider-specific configurations
+
+  # Local provider settings
+  local:
+    model: "hog"  # 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
+    num_jitters: 1  # Higher = more accurate but slower
+
+  # AWS Rekognition settings (only needed if provider is 'aws')
+  aws:
+    # AWS credentials (optional if using AWS CLI configuration)
+    # aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
+    # aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
+    aws_region: "us-east-1"
+    similarity_threshold: 80.0  # Percentage (0-100)
+
+  # Azure Face API settings (only needed if provider is 'azure')
+  azure:
+    # azure_api_key: "YOUR_AZURE_API_KEY"
+    # azure_endpoint: "https://YOUR_REGION.api.cognitive.microsoft.com"
+    person_group_id: "dropbox-photo-organizer"
+    confidence_threshold: 0.5  # 0.0 to 1.0
 
 processing:
   # Enable dry run mode (list matches without moving files)

@@ -1,16 +1,48 @@
-# Dropbox SDK
+# Core dependencies
 dropbox>=11.36.0
-
-# Configuration management
 PyYAML>=6.0
-
-# Face recognition (will be used in next phase)
-# face-recognition>=1.3.0
-# Note: face-recognition requires dlib, which needs cmake and a C++ compiler
-# Installation instructions: https://github.com/ageitgey/face_recognition#installation
-
-# Image processing
-# Pillow>=10.0.0
-
-# Logging and utilities
 python-dateutil>=2.8.0
+numpy>=1.21.0
+
+# Image processing (required for all providers)
+Pillow>=10.0.0
+
+# ======================================================================
+# Face Recognition Providers (install based on your chosen provider)
+# ======================================================================
+
+# LOCAL PROVIDER (face_recognition library - dlib-based)
+# Recommended for: Getting started, offline processing, no API costs
+# Requirements: cmake, C++ compiler, dlib
+# Installation guide: https://github.com/ageitgey/face_recognition#installation
+#
+# face-recognition>=1.3.0
+# dlib>=19.24.0
+
+# AWS PROVIDER (AWS Rekognition)
+# Recommended for: Production, high accuracy, scalability
+# Requirements: AWS account, API credentials
+#
+# boto3>=1.26.0
+
+# AZURE PROVIDER (Azure Face API)
+# Recommended for: Enterprise, persistent face data, person identification
+# Requirements: Azure account, Face API subscription
+#
+# azure-cognitiveservices-vision-face>=0.6.0
+# msrest>=0.7.0
+
+# ======================================================================
+# Installation examples:
+# ======================================================================
+# For local provider only:
+#   pip install face-recognition Pillow
+#
+# For AWS provider only:
+#   pip install boto3 Pillow
+#
+# For Azure provider only:
+#   pip install azure-cognitiveservices-vision-face msrest Pillow
+#
+# For all providers:
+#   pip install face-recognition boto3 azure-cognitiveservices-vision-face msrest Pillow
