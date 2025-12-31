@@ -59,9 +59,39 @@ The `face_recognition` library is built on top of dlib, which requires several s
 
 > **Quick Setup**: For automated installation, use the provided installation script:
 > ```bash
+> # Interactive mode (prompts for confirmation)
 > ./scripts/installation/install_macos.sh
+>
+> # Non-interactive mode (auto-recreates venv if exists)
+> ./scripts/installation/install_macos.sh --yes
+>
+> # Force recreate venv (no prompt)
+> ./scripts/installation/install_macos.sh --force
 > ```
-> The script will check if each dependency is already installed, validate versions, and handle errors automatically. Continue reading for manual installation steps.
+>
+> **Important Notes About the Installation Script:**
+>
+> - **Python Version Compatibility**: The script automatically detects if you have Python 3.13+ and will install Python 3.12 via Homebrew for better dlib compatibility. Python 3.13 has known issues with dlib compilation.
+>
+> - **Automatic Fallbacks**: If dlib fails to compile from source, the script will automatically:
+>   1. Install dlib via Homebrew (pre-compiled binary)
+>   2. Install dependencies separately
+>   3. Retry with `--no-build-isolation` flag
+>
+> - **Required Dependencies Installed**:
+>   - `setuptools`: Required for face_recognition_models (pkg_resources)
+>   - `dlib`: Core face detection library
+>   - `face-recognition`: Python wrapper for dlib
+>   - `numpy`, `Pillow`, `Click`: Supporting libraries
+>
+> - **Script Options**:
+>   - `--yes` or `-y`: Non-interactive mode (useful for automation/CI)
+>   - `--force` or `-f`: Force recreate virtual environment
+>   - `--help` or `-h`: Show help message
+>
+> - **Expected Installation Time**: 5-15 minutes depending on whether dlib compiles from source or uses Homebrew binary
+>
+> The script will check if each dependency is already installed, validate versions, and handle errors automatically. Continue reading for manual installation steps if you prefer.
 
 #### Manual Installation Steps
 
@@ -80,26 +110,50 @@ The `face_recognition` library is built on top of dlib, which requires several s
    brew install cmake
    ```
 
-4. **Create and activate virtual environment**:
+4. **Install Python 3.12 (Recommended for dlib compatibility)**:
+   ```bash
+   # Python 3.13+ has known compilation issues with dlib
+   brew install python@3.12
+   ```
+
+5. **Create and activate virtual environment**:
    ```bash
    cd /path/to/dropboxFamilyPhotoOrganizer
-   python3 -m venv venv
+
+   # Use Python 3.12 specifically (recommended)
+   python3.12 -m venv venv
+   # OR use default python3 (may have compatibility issues if 3.13+)
+   # python3 -m venv venv
+
    source venv/bin/activate
    ```
 
-5. **Install face_recognition**:
+6. **Install face_recognition**:
    ```bash
    pip install --upgrade pip
+
+   # Install setuptools first (required for face_recognition_models)
+   pip install setuptools
+
+   # Install face-recognition (this may take 5-15 minutes to compile dlib)
    pip install face-recognition
    ```
 
    This will automatically install:
+   - setuptools (required for pkg_resources)
    - dlib (the core face recognition library)
    - face-recognition (the Python wrapper)
    - numpy (numerical computing)
    - Pillow (image processing)
 
-6. **Verify installation**:
+   **Note**: If dlib compilation fails, try the Homebrew fallback:
+   ```bash
+   brew install dlib
+   pip install setuptools numpy Pillow Click face-recognition-models
+   pip install --no-build-isolation face-recognition
+   ```
+
+7. **Verify installation**:
    ```bash
    python -c "import face_recognition; print('Success! face_recognition version:', face_recognition.__version__)"
    ```
@@ -385,7 +439,51 @@ If you're getting too many or too few matches, adjust these settings:
 
 ## Troubleshooting
 
-### Installation Issues
+### macOS Installation Script Issues
+
+**Problem**: Script fails with "dlib compilation error" on Python 3.13
+- **Root Cause**: Python 3.13 introduced changes that break dlib's build process
+- **Solution**: The script now automatically installs Python 3.12 when it detects Python 3.13+
+- **Manual Fix**: Install Python 3.12 explicitly:
+  ```bash
+  brew install python@3.12
+  ./scripts/installation/install_macos.sh --force
+  ```
+
+**Problem**: Script hangs at "Do you want to recreate it?" prompt
+- **Solution**: Use non-interactive mode:
+  ```bash
+  ./scripts/installation/install_macos.sh --yes
+  ```
+
+**Problem**: `ModuleNotFoundError: No module named 'pkg_resources'`
+- **Root Cause**: Missing setuptools package
+- **Solution**: The script now automatically installs setuptools before face-recognition
+- **Manual Fix**:
+  ```bash
+  source venv/bin/activate
+  pip install setuptools
+  pip install face-recognition
+  ```
+
+**Problem**: Script fails even after installing Python 3.12
+- **Possible Cause**: Existing venv was created with Python 3.13
+- **Solution**: Force recreate the virtual environment:
+  ```bash
+  ./scripts/installation/install_macos.sh --force
+  ```
+
+**Problem**: "Building wheel for dlib failed" error
+- **Solution**: The script will automatically try Homebrew dlib as fallback
+- **Manual Fix**:
+  ```bash
+  brew install dlib
+  source venv/bin/activate
+  pip install setuptools numpy Pillow Click face-recognition-models
+  pip install --no-build-isolation face-recognition
+  ```
+
+### General Installation Issues
 
 **Problem**: `error: Microsoft Visual C++ 14.0 or greater is required` (Windows)
 - **Solution**: Install Visual Studio Build Tools (see Windows installation section)

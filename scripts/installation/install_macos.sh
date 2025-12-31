@@ -6,6 +6,38 @@
 
 set -e  # Exit on error
 
+# Parse command line arguments
+FORCE_RECREATE=false
+NON_INTERACTIVE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE_RECREATE=true
+            shift
+            ;;
+        --yes|-y)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  -f, --force          Force recreate virtual environment if it exists"
+            echo "  -y, --yes            Non-interactive mode (auto-answer yes to prompts)"
+            echo "  -h, --help           Show this help message"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,7 +103,10 @@ else
     # Add Homebrew to PATH for Apple Silicon Macs
     if [[ $(uname -m) == 'arm64' ]]; then
         print_info "Detected Apple Silicon Mac. Adding Homebrew to PATH..."
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+        # Only add to .zprofile if not already present
+        if ! grep -q '/opt/homebrew/bin/brew shellenv' ~/.zprofile 2>/dev/null; then
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+        fi
         eval "$(/opt/homebrew/bin/brew shellenv)"
     fi
 
@@ -109,13 +144,39 @@ else
     fi
 fi
 
-# Step 4: Check Python version
+# Step 4: Check Python version and install Python 3.12 if needed
 print_info "Step 4: Checking Python version..."
-if command_exists python3; then
+
+# Check for Python 3.12 specifically (best compatibility with dlib)
+PYTHON_CMD="python3"
+if command_exists python3.12; then
+    PYTHON_CMD="python3.12"
+    PYTHON_VERSION=$(python3.12 --version | cut -d' ' -f2)
+    print_info "Found Python 3.12 version $PYTHON_VERSION"
+    print_success "Python 3.12 is installed (recommended for dlib compatibility)"
+elif command_exists python3; then
     PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f2)
+
     print_info "Found Python version $PYTHON_VERSION"
 
-    if version_ge "$PYTHON_VERSION" "3.7.0"; then
+    # Check if Python 3.13+ (has dlib compilation issues)
+    if [[ "$PYTHON_MAJOR" -eq 3 && "$PYTHON_MINOR" -ge 13 ]]; then
+        print_warning "Python 3.13+ has known compatibility issues with dlib compilation"
+        print_info "Installing Python 3.12 for better compatibility..."
+
+        brew install python@3.12
+
+        if command_exists python3.12; then
+            PYTHON_CMD="python3.12"
+            PYTHON_VERSION=$(python3.12 --version | cut -d' ' -f2)
+            print_success "Python 3.12 installed successfully"
+        else
+            print_error "Failed to install Python 3.12"
+            exit 1
+        fi
+    elif version_ge "$PYTHON_VERSION" "3.7.0"; then
         print_success "Python version is sufficient (>= 3.7)"
     else
         print_error "Python version $PYTHON_VERSION is too old. Python 3.7+ required."
@@ -123,28 +184,50 @@ if command_exists python3; then
         exit 1
     fi
 else
-    print_error "Python 3 not found. Please install Python 3.7 or higher"
-    exit 1
+    print_error "Python 3 not found. Installing Python 3.12..."
+    brew install python@3.12
+
+    if command_exists python3.12; then
+        PYTHON_CMD="python3.12"
+        PYTHON_VERSION=$(python3.12 --version | cut -d' ' -f2)
+        print_success "Python 3.12 installed successfully"
+    else
+        print_error "Failed to install Python 3.12"
+        exit 1
+    fi
 fi
+
+print_info "Using Python: $PYTHON_CMD ($PYTHON_VERSION)"
 
 # Step 5: Create virtual environment
 print_info "Step 5: Setting up virtual environment..."
 if [ -d "venv" ]; then
     print_warning "Virtual environment already exists at ./venv"
-    read -p "Do you want to recreate it? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+
+    RECREATE=false
+    if [ "$FORCE_RECREATE" = true ] || [ "$NON_INTERACTIVE" = true ]; then
+        RECREATE=true
+    else
+        read -p "Do you want to recreate it? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            RECREATE=true
+        fi
+    fi
+
+    if [ "$RECREATE" = true ]; then
         print_info "Removing existing virtual environment..."
         rm -rf venv
-        print_info "Creating new virtual environment..."
-        python3 -m venv venv
+        print_info "Creating new virtual environment with $PYTHON_CMD..."
+        $PYTHON_CMD -m venv venv
         print_success "Virtual environment recreated"
     else
         print_info "Using existing virtual environment"
+        print_warning "Note: Existing venv may be using a different Python version"
     fi
 else
-    print_info "Creating virtual environment..."
-    python3 -m venv venv
+    print_info "Creating virtual environment with $PYTHON_CMD..."
+    $PYTHON_CMD -m venv venv
     print_success "Virtual environment created"
 fi
 
@@ -168,7 +251,35 @@ print_success "pip upgraded to version $PIP_VERSION"
 # Step 7: Install face_recognition library
 print_info "Step 7: Installing face_recognition library..."
 print_warning "This may take several minutes as it compiles dlib from source..."
-pip install face-recognition
+
+# First, ensure setuptools is installed (required for face_recognition_models)
+print_info "Installing setuptools (required for face_recognition_models)..."
+pip install setuptools --quiet
+
+# Try to install face-recognition (which includes dlib)
+print_info "Installing face-recognition..."
+if ! pip install face-recognition 2>/dev/null; then
+    print_warning "Failed to compile dlib from source. Trying alternative method..."
+
+    # Try installing dlib via Homebrew as a fallback
+    print_info "Installing dlib via Homebrew..."
+    if ! brew list dlib &>/dev/null; then
+        brew install dlib
+    fi
+
+    # Install other dependencies first
+    print_info "Installing face-recognition dependencies..."
+    pip install numpy Pillow Click face-recognition-models
+
+    # Try face-recognition again
+    print_info "Retrying face-recognition installation..."
+    if ! pip install --no-build-isolation face-recognition 2>/dev/null; then
+        print_error "Failed to install face-recognition even with Homebrew dlib"
+        print_info "This may be due to Python version incompatibility"
+        print_info "Consider using Python 3.11 or 3.12 instead"
+        exit 1
+    fi
+fi
 
 print_info "Verifying installation..."
 
