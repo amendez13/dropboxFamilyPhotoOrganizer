@@ -57,6 +57,14 @@ The `face_recognition` library is built on top of dlib, which requires several s
 
 ### macOS
 
+> **Quick Setup**: For automated installation, use the provided installation script:
+> ```bash
+> ./scripts/install_macos.sh
+> ```
+> The script will check if each dependency is already installed, validate versions, and handle errors automatically. Continue reading for manual installation steps.
+
+#### Manual Installation Steps
+
 1. **Install Xcode Command Line Tools**:
    ```bash
    xcode-select --install
