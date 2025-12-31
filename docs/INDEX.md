@@ -38,6 +38,14 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - Token management
 - Troubleshooting permission issues
 
+**[FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md)**
+- Local face recognition provider setup
+- System prerequisites and dependencies
+- Installation guide for macOS, Linux, and Windows
+- Configuration instructions
+- First training run with reference photos
+- Parameter tuning and troubleshooting
+
 ---
 
 ## Architecture
@@ -91,6 +99,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 |----------|---------|----------|
 | [README.md](../README.md) | Getting started, installation, usage | All users |
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
+| [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
 
