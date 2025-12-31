@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python-based tool to scan Dropbox directories for photos containing a specific person using face recognition, then move matching photos to a designated folder.
 
-**Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Move matches to target directory.
+**Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Copy/move matches to target directory.
 
 ## Architecture
 
@@ -20,7 +20,8 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
    - Required scopes: `files.content.read`, `files.content.write`, `files.metadata.read`
    - Use `/files/list_folder` with `recursive=True` for directory traversal
    - Handle pagination via `has_more` and `/files/list_folder/continue`
-   - Move files with `/files/move_v2` (supports `autorename` for conflicts)
+   - Copy files with `/files/copy_v2` (default, safer - preserves originals)
+   - Move files with `/files/move_v2` (destructive option, supports `autorename` for conflicts)
 
 2. **Face Recognition Pipeline**:
    - Pre-compute face encodings from reference photos of target person
@@ -29,6 +30,8 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
    - Filter for supported image formats: .jpg, .jpeg, .png, .heic
 
 3. **Processing Strategy**:
+   - Default to copy operation (safer, preserves originals)
+   - Audit logging for all file operations
    - Batch processing with logging and dry-run mode
    - Handle Dropbox API rate limits
    - Support resume on errors for large photo libraries

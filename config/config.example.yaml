@@ -50,7 +50,14 @@ face_recognition:
     confidence_threshold: 0.5  # 0.0 to 1.0
 
 processing:
-  # Enable dry run mode (list matches without moving files)
+  # Operation mode: 'copy' (default, safer) or 'move' (destructive)
+  # Copy preserves original files, move deletes them from source
+  operation: "copy"
+
+  # Enable operation logging to track all file operations
+  log_operations: true
+
+  # Enable dry run mode (list matches without copying/moving files)
   dry_run: true
 
   # Batch size for processing photos
