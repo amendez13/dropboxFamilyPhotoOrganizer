@@ -22,6 +22,18 @@ Follow the detailed instructions in [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.m
 
 ### 2. Install Dependencies
 
+#### Face Recognition Setup (macOS)
+
+For macOS users, use the automated installation script:
+
+```bash
+./scripts/installation/install_macos.sh
+```
+
+This script will install all required dependencies including dlib, face_recognition, and their system-level requirements. For manual installation or other operating systems, see [docs/FACE_RECOGNITION_LOCAL_SETUP.md](docs/FACE_RECOGNITION_LOCAL_SETUP.md).
+
+#### Standard Installation
+
 ```bash
 # Create a virtual environment (recommended)
 python3 -m venv venv
@@ -92,8 +104,11 @@ dropboxFamilyPhotoOrganizer/
 │   ├── config.yaml          # Your configuration (gitignored)
 │   └── config.example.yaml  # Configuration template
 ├── docs/
-│   └── DROPBOX_SETUP.md    # Detailed setup instructions
+│   ├── DROPBOX_SETUP.md              # Dropbox setup instructions
+│   └── FACE_RECOGNITION_LOCAL_SETUP.md  # Face recognition setup guide
 ├── scripts/
+│   ├── installation/
+│   │   └── install_macos.sh    # macOS installation automation script
 │   ├── dropbox_client.py   # Dropbox API client
 │   ├── test_dropbox_connection.py  # Connection test script
 │   ├── check_account.py    # Account verification utility
