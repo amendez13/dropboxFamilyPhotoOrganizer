@@ -16,7 +16,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ## Getting Started
 
-**[README.md](README.md)**
+**[README.md](../README.md)**
 - Project overview and features
 - Quick start guide
 - Installation instructions
@@ -29,7 +29,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ## Setup Guides
 
-**[docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md)**
+**[DROPBOX_SETUP.md](DROPBOX_SETUP.md)**
 - Step-by-step Dropbox API setup
 - Creating a Dropbox app
 - Configuring permissions and scopes
@@ -42,7 +42,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ## Architecture
 
-**[docs/FACE_RECOGNITION_ARCHITECTURE.md](docs/FACE_RECOGNITION_ARCHITECTURE.md)**
+**[FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md)**
 - Face recognition architecture and design
 - Provider pattern implementation (Local, AWS, Azure)
 - Design decisions and trade-offs
@@ -55,7 +55,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ## Developer Resources
 
-**[CLAUDE.md](CLAUDE.md)**
+**[CLAUDE.md](../CLAUDE.md)**
 - Project overview for AI assistants
 - Technology stack details
 - Core workflow and key components
@@ -89,10 +89,10 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [README.md](README.md) | Getting started, installation, usage | All users |
-| [DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) | Dropbox API configuration | All users |
-| [FACE_RECOGNITION_ARCHITECTURE.md](docs/FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
-| [CLAUDE.md](CLAUDE.md) | AI assistant guidance | Claude Code |
+| [README.md](../README.md) | Getting started, installation, usage | All users |
+| [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
+| [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
+| [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
 
 ---
 
