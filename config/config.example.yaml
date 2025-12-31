@@ -50,6 +50,14 @@ face_recognition:
     confidence_threshold: 0.5  # 0.0 to 1.0
 
 processing:
+  # File operation mode: 'copy' (safer, default) or 'move' (destructive)
+  # - copy: Preserves original files, prevents data loss, maintains shared links
+  # - move: Removes files from source, use only when you're sure
+  operation: "copy"
+
+  # Enable audit logging of all file operations
+  log_operations: true
+
   # Enable dry run mode (list matches without moving files)
   dry_run: true
 

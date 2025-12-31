@@ -195,6 +195,42 @@ class DropboxClient:
             self.logger.warning(f"Could not get thumbnail for '{dropbox_path}': {e}")
             return None
 
+    def copy_file(
+        self,
+        source_path: str,
+        dest_path: str,
+        autorename: bool = True,
+        allow_shared_folder: bool = False
+    ) -> bool:
+        """
+        Copy a file to a different location in Dropbox.
+
+        Args:
+            source_path: Current path of the file
+            dest_path: Destination path
+            autorename: If True, rename file if destination already exists
+            allow_shared_folder: Allow copying to/from shared folders
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.logger.info(f"Copying: {source_path} -> {dest_path}")
+
+            result = self.dbx.files_copy_v2(
+                source_path,
+                dest_path,
+                autorename=autorename,
+                allow_shared_folder=allow_shared_folder
+            )
+
+            self.logger.debug(f"Copied successfully: {result.metadata.name}")
+            return True
+
+        except ApiError as e:
+            self.logger.error(f"Error copying file '{source_path}': {e}")
+            return False
+
     def move_file(
         self,
         source_path: str,

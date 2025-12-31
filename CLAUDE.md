@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python-based tool to scan Dropbox directories for photos containing a specific person using face recognition, then move matching photos to a designated folder.
 
-**Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Move matches to target directory.
+**Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Copy/move matches to target directory.
+
+**Default operation**: Copy (safer, preserves originals) with optional move mode for when space is critical.
 
 ## Architecture
 
@@ -20,7 +22,9 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
    - Required scopes: `files.content.read`, `files.content.write`, `files.metadata.read`
    - Use `/files/list_folder` with `recursive=True` for directory traversal
    - Handle pagination via `has_more` and `/files/list_folder/continue`
-   - Move files with `/files/move_v2` (supports `autorename` for conflicts)
+   - Copy files with `/files/copy_v2` (default, safer operation)
+   - Move files with `/files/move_v2` (optional, space-efficient but destructive)
+   - Both operations support `autorename` for conflicts
 
 2. **Face Recognition Pipeline**:
    - Pre-compute face encodings from reference photos of target person
@@ -29,7 +33,10 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
    - Filter for supported image formats: .jpg, .jpeg, .png, .heic
 
 3. **Processing Strategy**:
-   - Batch processing with logging and dry-run mode
+   - Default to copy operation (safer, preserves originals)
+   - Audit logging of all file operations to `operations.log`
+   - Batch processing with progress tracking
+   - Dry-run mode for safe testing
    - Handle Dropbox API rate limits
    - Support resume on errors for large photo libraries
 
@@ -82,12 +89,21 @@ python scripts/list_folders.py
 deactivate
 ```
 
-### Running the Main Script (Future)
+### Running the Main Script
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Run photo organizer
+# Dry run (preview without changes)
+python scripts/organize_photos.py --dry-run
+
+# Copy mode (default - safer, preserves originals)
 python scripts/organize_photos.py
+
+# Move mode (space-efficient but destructive)
+python scripts/organize_photos.py --move
+
+# With verbose logging
+python scripts/organize_photos.py --verbose
 ```
