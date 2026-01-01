@@ -149,7 +149,7 @@ jobs:
 
     - name: Check Python syntax
       run: |
-        python -m py_compile scripts/**/*.py
+        find scripts -name '*.py' -exec python -m py_compile {} +
 
   integration:
     name: Integration Tests
