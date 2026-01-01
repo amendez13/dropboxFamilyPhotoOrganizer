@@ -3,28 +3,27 @@ Azure Face API face recognition provider.
 Uses Azure Cognitive Services Face API for face detection and identification.
 """
 
-import os
 import logging
-from typing import List, Dict, Tuple, Optional
-import numpy as np
+import os
 import time
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 try:
     from azure.cognitiveservices.vision.face import FaceClient
     from azure.cognitiveservices.vision.face.models import TrainingStatusType
     from msrest.authentication import CognitiveServicesCredentials
+
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.face_recognition.base_provider import (
-    BaseFaceRecognitionProvider,
-    FaceEncoding,
-    FaceMatch
-)
+from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch
 
 
 class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -62,8 +61,8 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 "Install with: pip install azure-cognitiveservices-vision-face"
             )
 
-        api_key = config.get('azure_api_key')
-        endpoint = config.get('azure_endpoint')
+        api_key = config.get("azure_api_key")
+        endpoint = config.get("azure_endpoint")
 
         if not api_key or not endpoint:
             raise ValueError("azure_api_key and azure_endpoint are required")
@@ -71,8 +70,8 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         # Initialize Face client
         self.client = FaceClient(endpoint, CognitiveServicesCredentials(api_key))
 
-        self.person_group_id = config.get('person_group_id', 'dropbox-photo-organizer')
-        self.confidence_threshold = config.get('confidence_threshold', 0.5)
+        self.person_group_id = config.get("person_group_id", "dropbox-photo-organizer")
+        self.confidence_threshold = config.get("confidence_threshold", 0.5)
         self.person_id = None  # Will be created when loading reference photos
 
     def get_provider_name(self) -> str:
@@ -100,8 +99,8 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             # Create new person group
             self.client.person_group.create(
                 person_group_id=self.person_group_id,
-                name='Dropbox Photo Organizer',
-                recognition_model='recognition_04'  # Latest model
+                name="Dropbox Photo Organizer",
+                recognition_model="recognition_04",  # Latest model
             )
             self.logger.info(f"Created new person group: {self.person_group_id}")
 
@@ -116,10 +115,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 self.logger.info(f"Using existing person: {persons[0].name}")
             else:
                 # Create new person
-                person = self.client.person_group_person.create(
-                    self.person_group_id,
-                    name=name
-                )
+                person = self.client.person_group_person.create(self.person_group_id, name=name)
                 self.person_id = person.person_id
                 self.logger.info(f"Created new person: {name}")
         except Exception as e:
@@ -150,24 +146,18 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 continue
 
             try:
-                with open(photo_path, 'rb') as f:
+                with open(photo_path, "rb") as f:
                     image_data = f.read()
 
                 # Add face to person
                 self.client.person_group_person.add_face_from_stream(
-                    self.person_group_id,
-                    self.person_id,
-                    image_data,
-                    detection_model='detection_03'  # Latest model
+                    self.person_group_id, self.person_id, image_data, detection_model="detection_03"  # Latest model
                 )
 
                 face_count += 1
 
                 # Store as FaceEncoding for compatibility
-                self.reference_encodings.append(FaceEncoding(
-                    encoding=np.array([]),  # Placeholder
-                    source=photo_path
-                ))
+                self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path))  # Placeholder
 
                 self.logger.info(f"Added reference face from: {photo_path}")
 
@@ -184,9 +174,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
             # Wait for training to complete
             while True:
-                training_status = self.client.person_group.get_training_status(
-                    self.person_group_id
-                )
+                training_status = self.client.person_group.get_training_status(self.person_group_id)
                 if training_status.status == TrainingStatusType.succeeded:
                     self.logger.info("Training completed successfully")
                     break
@@ -214,19 +202,14 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         """
         try:
             detected_faces = self.client.face.detect_with_stream(
-                image_data,
-                detection_model='detection_03',
-                recognition_model='recognition_04',
-                return_face_id=True
+                image_data, detection_model="detection_03", recognition_model="recognition_04", return_face_id=True
             )
 
             face_encodings = []
             for face in detected_faces:
-                face_encodings.append(FaceEncoding(
-                    encoding=np.array([face.face_id]),  # Store face_id
-                    source=source,
-                    confidence=None
-                ))
+                face_encodings.append(
+                    FaceEncoding(encoding=np.array([face.face_id]), source=source, confidence=None)  # Store face_id
+                )
 
             return face_encodings
 
@@ -234,11 +217,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             self.logger.error(f"Error detecting faces in {source}: {e}")
             return []
 
-    def compare_faces(
-        self,
-        face_encoding: FaceEncoding,
-        tolerance: Optional[float] = None
-    ) -> FaceMatch:
+    def compare_faces(self, face_encoding: FaceEncoding, tolerance: Optional[float] = None) -> FaceMatch:
         """
         Compare face against reference using Azure Face API.
 
@@ -259,11 +238,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             # Identify face
             face_id = face_encoding.encoding[0]  # Extract face_id
 
-            results = self.client.face.identify(
-                [face_id],
-                self.person_group_id,
-                confidence_threshold=tolerance
-            )
+            results = self.client.face.identify([face_id], self.person_group_id, confidence_threshold=tolerance)
 
             if results and results[0].candidates:
                 # Check if identified as our target person
@@ -272,10 +247,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
                         confidence = candidate.confidence
 
                         return FaceMatch(
-                            is_match=True,
-                            confidence=confidence,
-                            distance=1.0 - confidence,
-                            matched_encoding=None
+                            is_match=True, confidence=confidence, distance=1.0 - confidence, matched_encoding=None
                         )
 
             return FaceMatch(is_match=False, confidence=0.0, distance=1.0)

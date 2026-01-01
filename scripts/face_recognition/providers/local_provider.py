@@ -3,27 +3,27 @@ Local face recognition provider using the face_recognition library (dlib-based).
 Runs entirely offline without external API calls.
 """
 
-import os
 import logging
-from typing import List, Dict, Tuple, Optional
+import os
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 
 try:
+    import io
+
     import face_recognition
     from PIL import Image
-    import io
+
     FACE_RECOGNITION_AVAILABLE = True
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.face_recognition.base_provider import (
-    BaseFaceRecognitionProvider,
-    FaceEncoding,
-    FaceMatch
-)
+from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch
 
 
 class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -56,14 +56,11 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         self.logger = logging.getLogger(__name__)
 
         if not FACE_RECOGNITION_AVAILABLE:
-            raise ImportError(
-                "face_recognition library not installed. "
-                "Install with: pip install face-recognition"
-            )
+            raise ImportError("face_recognition library not installed. " "Install with: pip install face-recognition")
 
-        self.model = config.get('model', 'hog')  # 'hog' or 'cnn'
-        self.num_jitters = config.get('num_jitters', 1)
-        self.default_tolerance = config.get('tolerance', 0.6)
+        self.model = config.get("model", "hog")  # 'hog' or 'cnn'
+        self.num_jitters = config.get("num_jitters", 1)
+        self.default_tolerance = config.get("tolerance", 0.6)
 
     def get_provider_name(self) -> str:
         """Get provider name."""
@@ -74,7 +71,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         if not FACE_RECOGNITION_AVAILABLE:
             return False, "face_recognition library not installed"
 
-        if self.model not in ['hog', 'cnn']:
+        if self.model not in ["hog", "cnn"]:
             return False, f"Invalid model: {self.model}. Must be 'hog' or 'cnn'"
 
         return True, None
@@ -108,25 +105,18 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
                     continue
 
                 if len(face_locations) > 1:
-                    self.logger.warning(
-                        f"Multiple faces found in {photo_path}. "
-                        f"Using the first face only."
-                    )
+                    self.logger.warning(f"Multiple faces found in {photo_path}. " f"Using the first face only.")
 
                 # Encode faces
                 encodings = face_recognition.face_encodings(
-                    image,
-                    known_face_locations=face_locations,
-                    num_jitters=self.num_jitters
+                    image, known_face_locations=face_locations, num_jitters=self.num_jitters
                 )
 
                 if encodings:
                     # Use first face
-                    self.reference_encodings.append(FaceEncoding(
-                        encoding=encodings[0],
-                        source=photo_path,
-                        bounding_box=face_locations[0]
-                    ))
+                    self.reference_encodings.append(
+                        FaceEncoding(encoding=encodings[0], source=photo_path, bounding_box=face_locations[0])
+                    )
                     self.logger.info(f"Loaded reference face from: {photo_path}")
 
             except Exception as e:
@@ -154,8 +144,8 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             image = Image.open(io.BytesIO(image_data))
 
             # Convert to RGB if necessary
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
 
             # Convert to numpy array
             image_array = np.array(image)
@@ -168,19 +158,13 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
             # Encode faces
             encodings = face_recognition.face_encodings(
-                image_array,
-                known_face_locations=face_locations,
-                num_jitters=self.num_jitters
+                image_array, known_face_locations=face_locations, num_jitters=self.num_jitters
             )
 
             # Create FaceEncoding objects
             face_encodings = []
             for encoding, location in zip(encodings, face_locations):
-                face_encodings.append(FaceEncoding(
-                    encoding=encoding,
-                    source=source,
-                    bounding_box=location
-                ))
+                face_encodings.append(FaceEncoding(encoding=encoding, source=source, bounding_box=location))
 
             return face_encodings
 
@@ -188,11 +172,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             self.logger.error(f"Error detecting faces in {source}: {e}")
             return []
 
-    def compare_faces(
-        self,
-        face_encoding: FaceEncoding,
-        tolerance: Optional[float] = None
-    ) -> FaceMatch:
+    def compare_faces(self, face_encoding: FaceEncoding, tolerance: Optional[float] = None) -> FaceMatch:
         """
         Compare a face encoding against reference encodings.
 
@@ -207,20 +187,13 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             tolerance = self.default_tolerance
 
         if not self.reference_encodings:
-            return FaceMatch(
-                is_match=False,
-                confidence=0.0,
-                distance=1.0
-            )
+            return FaceMatch(is_match=False, confidence=0.0, distance=1.0)
 
         # Get reference encodings as list
         reference_encodings_list = [ref.encoding for ref in self.reference_encodings]
 
         # Calculate distances
-        distances = face_recognition.face_distance(
-            reference_encodings_list,
-            face_encoding.encoding
-        )
+        distances = face_recognition.face_distance(reference_encodings_list, face_encoding.encoding)
 
         # Find best match
         best_match_idx = np.argmin(distances)
@@ -238,5 +211,5 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             is_match=is_match,
             confidence=confidence,
             distance=float(best_distance),
-            matched_encoding=self.reference_encodings[best_match_idx] if is_match else None
+            matched_encoding=self.reference_encodings[best_match_idx] if is_match else None,
         )

@@ -70,6 +70,15 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - Development commands and setup
 - Common development tasks
 
+**[CI.md](CI.md)**
+- Continuous Integration (CI) pipeline documentation
+- GitHub Actions workflow details
+- Code quality and testing automation
+- Local development workflow
+- Running CI checks locally
+- Troubleshooting CI failures
+- Best practices for development
+
 ---
 
 ## Project Status
@@ -101,6 +110,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
+| [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
 
 ---

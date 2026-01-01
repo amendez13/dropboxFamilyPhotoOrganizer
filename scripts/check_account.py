@@ -2,8 +2,9 @@
 Check Dropbox account details and app access type.
 """
 
-import sys
 import os
+import sys
+
 import yaml
 
 # Add parent directory to path to import modules
@@ -12,10 +13,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.dropbox_client import DropboxClient
 
 # Load config
-with open('config/config.yaml', 'r') as f:
+with open("config/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-client = DropboxClient(config['dropbox']['access_token'])
+client = DropboxClient(config["dropbox"]["access_token"])
 
 print("=" * 60)
 print("Dropbox Account Information")
@@ -33,7 +34,7 @@ try:
     space = client.dbx.users_get_space_usage()
     used_gb = space.used / (1024**3)
 
-    if hasattr(space, 'allocation') and hasattr(space.allocation, 'get_individual'):
+    if hasattr(space, "allocation") and hasattr(space.allocation, "get_individual"):
         allocated_gb = space.allocation.get_individual().allocated / (1024**3)
         print(f"\nSpace Usage:")
         print(f"  Used: {used_gb:.2f} GB")
@@ -47,7 +48,7 @@ try:
 
     print(f"\nFound {len(result.entries)} items in root:")
     for entry in result.entries:
-        entry_type = "📁" if entry.__class__.__name__ == 'FolderMetadata' else "📄"
+        entry_type = "📁" if entry.__class__.__name__ == "FolderMetadata" else "📄"
         print(f"  {entry_type} {entry.name}")
 
     # Check if there are more entries

@@ -2,8 +2,9 @@
 Quick script to list top-level folders in your Dropbox to help find the correct path.
 """
 
-import sys
 import os
+import sys
+
 import yaml
 
 # Add parent directory to path to import modules
@@ -12,10 +13,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.dropbox_client import DropboxClient
 
 # Load config
-with open('config/config.yaml', 'r') as f:
+with open("config/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-client = DropboxClient(config['dropbox']['access_token'])
+client = DropboxClient(config["dropbox"]["access_token"])
 
 print("Listing top-level folders in your Dropbox:\n")
 print("=" * 60)
@@ -27,8 +28,8 @@ try:
     files = []
 
     for entry in result.entries:
-        if hasattr(entry, 'path_display'):
-            if entry.__class__.__name__ == 'FolderMetadata':
+        if hasattr(entry, "path_display"):
+            if entry.__class__.__name__ == "FolderMetadata":
                 folders.append(entry.path_display)
             else:
                 files.append(entry.path_display)

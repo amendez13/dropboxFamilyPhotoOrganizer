@@ -1,5 +1,7 @@
 # Dropbox Family Photo Organizer
 
+![CI](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/workflows/CI/badge.svg)
+
 Automatically scan your Dropbox photos, detect a specific person using face recognition, and organize matching photos into a designated folder.
 
 ## Features
@@ -198,6 +200,52 @@ All operations are logged to `operations.log` (unless disabled) for audit trail.
 - Paths are case-sensitive
 
 See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for more troubleshooting tips.
+
+## Development
+
+### Running Tests Locally
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest tests/ -v
+
+# Run tests with coverage
+pytest tests/ -v --cov=scripts --cov-report=term-missing
+
+# Format code
+black scripts/
+isort scripts/
+
+# Lint code
+flake8 scripts/
+```
+
+### CI Pipeline
+
+This project uses GitHub Actions for continuous integration. The CI pipeline runs on every push and pull request:
+
+**Lint and Code Quality**
+- Code formatting check (Black)
+- Import sorting check (isort)
+- Linting (flake8)
+- Type checking (mypy)
+
+**Testing**
+- Unit tests across Python 3.10, 3.11, and 3.12
+- Code coverage reporting
+
+**Security**
+- Security vulnerability scanning (bandit)
+- Dependency vulnerability checks (safety)
+
+**Configuration Validation**
+- YAML syntax validation
+- Python syntax checking
+
+All checks must pass before code can be merged to the main branch.
 
 ## Development Status
 

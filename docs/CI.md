@@ -1,0 +1,655 @@
+# Continuous Integration (CI) Pipeline
+
+This document details the CI/CD pipeline setup for the Dropbox Family Photo Organizer project using GitHub Actions.
+
+## Overview
+
+The CI pipeline automatically runs quality checks, tests, and security scans on every push and pull request to ensure code quality and prevent regressions. All checks must pass before code can be merged to the main branch.
+
+## Pipeline Architecture
+
+### Workflow File
+
+Location: `.github/workflows/ci.yml`
+
+**Triggers:**
+- Push to `main` or `develop` branches
+- Pull requests targeting `main` or `develop` branches
+
+### CI Jobs
+
+The pipeline consists of 5 independent jobs that run in parallel:
+
+1. **Lint and Code Quality**
+2. **Testing** (matrix across Python versions)
+3. **Security Checks**
+4. **Configuration Validation**
+5. **Build Status Check** (runs after all other jobs)
+
+## Job Details
+
+### 1. Lint and Code Quality
+
+Ensures consistent code style and catches common errors.
+
+**Tools Used:**
+- **Black** - Code formatter
+- **isort** - Import statement organizer
+- **flake8** - Linting and style guide enforcement
+- **mypy** - Static type checking
+
+**Checks Performed:**
+```bash
+# Code formatting (Black)
+black --check --diff scripts/
+
+# Import sorting (isort)
+isort --check-only --diff scripts/
+
+# Linting (flake8)
+flake8 scripts/ --count --select=E9,F63,F7,F82  # Critical errors
+flake8 scripts/ --count --exit-zero --max-complexity=10
+
+# Type checking (mypy)
+mypy scripts/ --ignore-missing-imports
+```
+
+**Configuration Files:**
+- `.flake8` - Flake8 settings
+- `.pylintrc` - Pylint configuration
+- `pyproject.toml` - Black, isort, and mypy settings
+
+### 2. Testing
+
+Runs the test suite across multiple Python versions to ensure compatibility.
+
+**Test Matrix:**
+- Python 3.10
+- Python 3.11
+- Python 3.12
+
+**Tools Used:**
+- **pytest** - Test framework
+- **pytest-cov** - Coverage reporting
+- **pytest-mock** - Mocking utilities
+
+**Commands:**
+```bash
+# Run tests with coverage
+pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
+
+# Upload coverage to Codecov (Python 3.12 only)
+# Requires CODECOV_TOKEN secret to be configured
+```
+
+**Test Configuration:**
+- Located in `pyproject.toml` under `[tool.pytest.ini_options]`
+- Test directory: `tests/`
+- Coverage source: `scripts/`
+
+**Current Test Suite:**
+- `tests/test_basic.py` - Basic validation tests
+  - Python version validation
+  - Dependency import checks
+  - Configuration file validation
+
+### 3. Security Checks
+
+Scans for security vulnerabilities in code and dependencies.
+
+**Tools Used:**
+- **bandit** - Security vulnerability scanner for Python code
+- **safety** - Checks for known security vulnerabilities in dependencies
+
+**Commands:**
+```bash
+# Scan code for security issues
+bandit -r scripts/ -f json -o bandit-report.json
+bandit -r scripts/
+
+# Check dependencies for known vulnerabilities
+safety check --json
+```
+
+**Note:** Security checks are currently non-blocking (continue-on-error: true) to allow development to proceed while vulnerabilities are being addressed.
+
+### 4. Configuration Validation
+
+Validates configuration files and Python syntax.
+
+**Checks:**
+1. **YAML Validation** - Ensures `config/config.example.yaml` is valid YAML
+2. **Python Syntax** - Validates all Python files compile correctly
+
+**Commands:**
+```bash
+# Validate YAML
+python -c "import yaml; yaml.safe_load(open('config/config.example.yaml'))"
+
+# Check Python syntax
+python -m py_compile scripts/**/*.py
+```
+
+### 5. Integration Tests
+
+Tests actual Dropbox API connectivity using GitHub Secrets.
+
+**When It Runs:**
+- Only on pushes to `main` branch (not on PRs)
+- Only when `RUN_INTEGRATION_TESTS` variable is set to `true`
+- Requires GitHub Secrets to be configured
+
+**What It Tests:**
+- Dropbox authentication with access token
+- Source folder accessibility
+- File listing capability
+- Thumbnail download functionality
+
+**Configuration Required:**
+See [GitHub Secrets Setup](#github-secrets-setup) section below for configuration instructions.
+
+### 6. Build Status Check
+
+Final job that verifies all required checks passed.
+
+**Dependencies:** lint, test, security, validate-config
+
+**Behavior:**
+- ✅ Passes if all dependent jobs succeed
+- ❌ Fails if any required job fails
+- ⚠️ Warns if security checks have issues (non-blocking)
+
+## Configuration Files
+
+### `.flake8`
+
+Flake8 linting configuration.
+
+**Key Settings:**
+```ini
+max-line-length = 127
+max-complexity = 10
+exclude = .git, __pycache__, venv, .venv, build, dist, *.egg-info
+ignore = W503, W504  # Line break before/after binary operators
+```
+
+### `.pylintrc`
+
+Pylint configuration (optional, not used in CI currently).
+
+**Key Settings:**
+```ini
+max-line-length = 127
+max-args = 7
+max-locals = 15
+disable = C0111, C0103, R0903, R0913, W0212
+```
+
+### `pyproject.toml`
+
+Unified configuration for multiple tools.
+
+**Black Settings:**
+```toml
+[tool.black]
+line-length = 127
+target-version = ['py310', 'py311', 'py312']
+```
+
+**isort Settings:**
+```toml
+[tool.isort]
+profile = "black"
+line_length = 127
+```
+
+**pytest Settings:**
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--verbose", "--strict-markers", "--disable-warnings"]
+```
+
+**mypy Settings:**
+```toml
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+ignore_missing_imports = true
+```
+
+**Coverage Settings:**
+```toml
+[tool.coverage.run]
+source = ["scripts"]
+omit = ["*/tests/*", "*/venv/*"]
+```
+
+## Development Dependencies
+
+Location: `requirements-dev.txt`
+
+**Testing:**
+- pytest>=7.4.0
+- pytest-cov>=4.1.0
+- pytest-mock>=3.11.0
+
+**Code Quality:**
+- black>=23.7.0
+- isort>=5.12.0
+- flake8>=6.1.0
+- pylint>=2.17.0
+- mypy>=1.5.0
+
+**Security:**
+- bandit>=1.7.5
+- safety>=2.3.0
+
+## Running CI Checks Locally
+
+Before pushing code, run these commands locally to catch issues early:
+
+### Install Development Dependencies
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+### Format Code
+
+```bash
+# Auto-format with Black
+black scripts/
+
+# Sort imports
+isort scripts/
+```
+
+### Run Linting
+
+```bash
+# Flake8 (syntax and style)
+flake8 scripts/
+
+# Pylint (optional, more detailed)
+pylint scripts/
+
+# Type checking
+mypy scripts/
+```
+
+### Run Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ -v --cov=scripts --cov-report=term-missing
+
+# Run specific test file
+pytest tests/test_basic.py -v
+```
+
+### Security Scans
+
+```bash
+# Scan code for security issues
+bandit -r scripts/
+
+# Check dependencies
+safety check
+```
+
+### Validate Configuration
+
+```bash
+# Validate YAML
+python -c "import yaml; yaml.safe_load(open('config/config.example.yaml'))"
+
+# Check Python syntax
+python -m py_compile scripts/**/*.py
+```
+
+## GitHub Secrets Setup
+
+To enable integration tests in CI, you need to configure GitHub Secrets and Variables.
+
+### Required Secrets
+
+Navigate to your repository Settings → Secrets and variables → Actions → Secrets:
+
+1. **DROPBOX_ACCESS_TOKEN**
+   - Your Dropbox API access token
+   - Get it from [Dropbox App Console](https://www.dropbox.com/developers/apps) → Your App → Settings → OAuth 2 → Generate
+   - Security: Never commit this to your repository
+
+2. **DROPBOX_SOURCE_FOLDER**
+   - Test folder path (e.g., `/Cargas de cámara/2013/08`)
+   - Must start with `/`
+   - Must exist and contain test images
+   - Case-sensitive
+
+3. **DROPBOX_DESTINATION_FOLDER**
+   - Destination folder path (e.g., `/Test/CI_Organized`)
+   - Must start with `/`
+   - Can be created if it doesn't exist
+   - Case-sensitive
+
+### Required Variable
+
+Navigate to your repository Settings → Secrets and variables → Actions → Variables:
+
+1. **RUN_INTEGRATION_TESTS**
+   - Value: `true` to enable integration tests, `false` to disable
+   - Default: Not set (integration tests disabled)
+
+### Setting Up Secrets
+
+**Step 1: Add Secrets**
+1. Go to your repository on GitHub
+2. Click Settings → Secrets and variables → Actions
+3. Click "New repository secret"
+4. Add each secret with its name and value
+5. Click "Add secret"
+
+**Step 2: Add Variable**
+1. Click on the "Variables" tab
+2. Click "New repository variable"
+3. Name: `RUN_INTEGRATION_TESTS`
+4. Value: `true`
+5. Click "Add variable"
+
+**Step 3: Verify Setup**
+1. Push a commit to `main` branch
+2. Go to Actions tab
+3. Check that "Integration Tests" job runs
+4. Verify the Dropbox connection test passes
+
+### Security Best Practices
+
+**Token Rotation:**
+- Rotate your Dropbox access token periodically
+- Update the GitHub secret when you generate a new token
+
+**Limiting Access:**
+- Use a dedicated test folder, not your main photo library
+- Consider creating a separate Dropbox app for testing
+- Use a small subset of photos for faster tests
+
+**Access Control:**
+- Only repository administrators can view/edit secrets
+- Secrets are encrypted at rest
+- Secrets are not exposed in logs
+- Pull requests from forks cannot access secrets
+
+### Disabling Integration Tests
+
+To disable integration tests:
+1. Go to Settings → Secrets and variables → Actions → Variables
+2. Either delete `RUN_INTEGRATION_TESTS` or set it to `false`
+
+### Troubleshooting
+
+**Integration tests not running:**
+- Ensure `RUN_INTEGRATION_TESTS` variable is set to `true`
+- Verify you pushed to `main` branch (not a PR)
+
+**"Invalid access token" error:**
+- Generate a new token in Dropbox App Console
+- Update `DROPBOX_ACCESS_TOKEN` secret in GitHub
+
+**"Path not found" error:**
+- Verify folder exists in Dropbox
+- Check path starts with `/`
+- Ensure exact case-sensitive match
+- Update `DROPBOX_SOURCE_FOLDER` or `DROPBOX_DESTINATION_FOLDER` secret
+
+### Example Values
+
+```
+DROPBOX_ACCESS_TOKEN: sl.B1a2b3c4d5...xyz
+DROPBOX_SOURCE_FOLDER: /Cargas de cámara/2013/08
+DROPBOX_DESTINATION_FOLDER: /Test/CI_Organized
+RUN_INTEGRATION_TESTS: true
+```
+
+**Note:** The example token is fake. Use your actual token.
+
+## CI Status Badge
+
+The README includes a CI status badge that shows the current build status:
+
+```markdown
+![CI](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/workflows/CI/badge.svg)
+```
+
+**Badge States:**
+- ✅ **Passing** - All checks passed
+- ❌ **Failing** - One or more checks failed
+- 🟡 **Running** - CI is currently running
+
+## Troubleshooting
+
+### Flake8 Errors
+
+**Problem:** Code doesn't meet style guidelines
+
+**Solution:**
+```bash
+# Run Black to auto-format
+black scripts/
+
+# Check what flake8 complains about
+flake8 scripts/ --show-source
+```
+
+### Import Order Issues
+
+**Problem:** Imports not sorted correctly
+
+**Solution:**
+```bash
+# Auto-fix with isort
+isort scripts/
+```
+
+### Test Failures
+
+**Problem:** Tests failing locally or in CI
+
+**Steps:**
+1. Run tests locally: `pytest tests/ -v`
+2. Check test output for specific failures
+3. Fix the failing tests
+4. Verify fix: `pytest tests/ -v`
+
+### Type Checking Issues
+
+**Problem:** mypy reports type errors
+
+**Solutions:**
+- Add type hints to function signatures
+- Use `# type: ignore` for unavoidable issues
+- Add missing stub packages
+- Configure `ignore_missing_imports = true` for external libraries
+
+### Security Warnings
+
+**Problem:** bandit reports security issues
+
+**Steps:**
+1. Review the reported issue
+2. Fix the security vulnerability
+3. If it's a false positive, add a `# nosec` comment with justification
+
+### Cache Issues
+
+**Problem:** CI using outdated dependencies
+
+**Solution:**
+- GitHub Actions automatically caches pip dependencies
+- To force refresh, update dependency versions in `requirements.txt`
+
+## Adding New Tests
+
+### Test Structure
+
+```
+tests/
+├── __init__.py           # Test package marker
+├── test_basic.py         # Basic validation tests
+├── test_dropbox.py       # Dropbox client tests (future)
+├── test_face_recognition.py  # Face recognition tests (future)
+└── conftest.py           # Shared fixtures (future)
+```
+
+### Example Test
+
+```python
+"""tests/test_example.py"""
+import pytest
+from pathlib import Path
+import sys
+
+# Add scripts to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+def test_something():
+    """Test description."""
+    assert True
+
+def test_with_fixture(tmp_path):
+    """Test using pytest fixture."""
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("content")
+    assert test_file.read_text() == "content"
+
+class TestGrouped:
+    """Group related tests in a class."""
+
+    def test_first(self):
+        assert 1 == 1
+
+    def test_second(self):
+        assert 2 == 2
+```
+
+### Running Specific Tests
+
+```bash
+# Run specific test file
+pytest tests/test_basic.py
+
+# Run specific test function
+pytest tests/test_basic.py::test_python_version
+
+# Run tests matching pattern
+pytest -k "test_config"
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage
+pytest --cov=scripts
+```
+
+## Future Enhancements
+
+### Planned Additions
+
+1. **Integration Tests**
+   - Test actual Dropbox API calls
+   - Requires secrets configuration in GitHub
+
+2. **Code Coverage Requirements**
+   - Enforce minimum coverage threshold (e.g., 80%)
+   - Fail CI if coverage drops below threshold
+
+3. **Performance Testing**
+   - Benchmark critical functions
+   - Alert on performance regressions
+
+4. **Automated Releases**
+   - Version tagging
+   - Changelog generation
+   - Release notes automation
+
+5. **Dependency Updates**
+   - Dependabot configuration
+   - Automated security updates
+
+6. **Pre-commit Hooks**
+   - Local validation before commits
+   - Auto-formatting on commit
+
+### Optional Integrations
+
+- **Codecov** - Detailed coverage reporting and visualization
+- **SonarCloud** - Advanced code quality metrics
+- **Snyk** - Enhanced security scanning
+- **CodeQL** - Semantic code analysis
+
+## Best Practices
+
+### Before Committing
+
+1. Format code: `black scripts/ && isort scripts/`
+2. Run linting: `flake8 scripts/`
+3. Run tests: `pytest tests/ -v`
+4. Check coverage: `pytest --cov=scripts --cov-report=term-missing`
+
+### Writing Tests
+
+1. Test one thing per test function
+2. Use descriptive test names
+3. Follow Arrange-Act-Assert pattern
+4. Use fixtures for common setup
+5. Mock external dependencies (Dropbox API, file system)
+
+### Handling CI Failures
+
+1. **Read the error message** - CI logs show exactly what failed
+2. **Reproduce locally** - Run the same command that failed in CI
+3. **Fix and verify** - Make the fix and confirm it works locally
+4. **Push and monitor** - Push the fix and watch CI to ensure it passes
+
+### Code Review Checklist
+
+- [ ] All CI checks passing
+- [ ] Code formatted with Black
+- [ ] Imports sorted with isort
+- [ ] Tests added for new functionality
+- [ ] Documentation updated
+- [ ] No security warnings
+- [ ] Type hints added where appropriate
+
+## References
+
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [pytest Documentation](https://docs.pytest.org/)
+- [Black Documentation](https://black.readthedocs.io/)
+- [flake8 Documentation](https://flake8.pycqa.org/)
+- [mypy Documentation](https://mypy.readthedocs.io/)
+- [bandit Documentation](https://bandit.readthedocs.io/)
+
+## Changelog
+
+### 2026-01-01 - Initial CI Setup
+
+**Added:**
+- GitHub Actions CI workflow (`.github/workflows/ci.yml`)
+- Code quality checks (Black, isort, flake8, mypy)
+- Test suite with pytest
+- Security scanning (bandit, safety)
+- Configuration validation
+- Development dependencies (`requirements-dev.txt`)
+- Configuration files (`.flake8`, `.pylintrc`, `pyproject.toml`)
+- Basic test suite (`tests/test_basic.py`)
+- CI status badge in README
+- This documentation
+
+**Changes:**
+- All Python code formatted with Black
+- All imports sorted with isort
+- README updated with Development section

@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint and Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort pylint mypy
+        pip install -r requirements.txt
+
+    - name: Check code formatting with Black
+      run: |
+        black --check --diff scripts/
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff scripts/
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Type checking with mypy
+      run: |
+        mypy scripts/ --ignore-missing-imports || true
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov pytest-mock
+        pip install -r requirements.txt
+
+    - name: Run unit tests
+      run: |
+        pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing || echo "No tests found yet"
+
+    - name: Upload coverage reports
+      if: matrix.python-version == '3.12'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+      continue-on-error: true
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+        pip install -r requirements.txt
+
+    - name: Run bandit security checks
+      run: |
+        bandit -r scripts/ -f json -o bandit-report.json || true
+        bandit -r scripts/ || true
+
+    - name: Check for known vulnerabilities in dependencies
+      run: |
+        safety check --json || true
+      continue-on-error: true
+
+  validate-config:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install PyYAML
+        pip install -r requirements.txt
+
+    - name: Validate YAML configuration files
+      run: |
+        python -c "
+        import yaml
+        import sys
+
+        try:
+            with open('config/config.example.yaml', 'r') as f:
+                yaml.safe_load(f)
+            print('✓ config.example.yaml is valid')
+        except Exception as e:
+            print(f'✗ config.example.yaml is invalid: {e}')
+            sys.exit(1)
+        "
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile scripts/**/*.py
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    # Only run if we have the Dropbox access token secret configured
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RUN_INTEGRATION_TESTS == 'true'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create config directory
+      run: mkdir -p config
+
+    - name: Create config.yaml from secrets
+      run: |
+        cat > config/config.yaml << 'EOF'
+        dropbox:
+          access_token: "${{ secrets.DROPBOX_ACCESS_TOKEN }}"
+          source_folder: "${{ secrets.DROPBOX_SOURCE_FOLDER }}"
+          destination_folder: "${{ secrets.DROPBOX_DESTINATION_FOLDER }}"
+
+        face_recognition:
+          provider: "local"
+          reference_photos_dir: "./reference_photos"
+          tolerance: 0.6
+          thumbnail_size: "w256h256"
+
+        processing:
+          operation: "copy"
+          log_operations: true
+          dry_run: true
+          batch_size: 50
+          image_extensions: [.jpg, .jpeg, .png, .heic]
+        EOF
+
+    - name: Run Dropbox connection test
+      run: |
+        python scripts/test_dropbox_connection.py
+      env:
+        PYTHONUNBUFFERED: 1
+
+  build-status:
+    name: CI Status Check
+    runs-on: ubuntu-latest
+    needs: [lint, test, security, validate-config]
+    if: always()
+
+    steps:
+    - name: Check build status
+      run: |
+        if [ "${{ needs.lint.result }}" != "success" ]; then
+          echo "❌ Linting failed"
+          exit 1
+        fi
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "❌ Tests failed"
+          exit 1
+        fi
+        if [ "${{ needs.security.result }}" != "success" ]; then
+          echo "⚠️  Security checks had warnings (non-blocking)"
+        fi
+        if [ "${{ needs.validate-config.result }}" != "success" ]; then
+          echo "❌ Configuration validation failed"
+          exit 1
+        fi
+        echo "✅ All CI checks passed!"

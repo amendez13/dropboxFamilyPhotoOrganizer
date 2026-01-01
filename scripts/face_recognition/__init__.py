@@ -32,16 +32,13 @@ class FaceRecognitionFactory:
     """
 
     PROVIDERS = {
-        'local': LocalFaceRecognitionProvider,
-        'aws': AWSFaceRecognitionProvider,
-        'azure': AzureFaceRecognitionProvider,
+        "local": LocalFaceRecognitionProvider,
+        "aws": AWSFaceRecognitionProvider,
+        "azure": AzureFaceRecognitionProvider,
     }
 
     @staticmethod
-    def create_provider(
-        provider_name: str,
-        config: Dict
-    ) -> BaseFaceRecognitionProvider:
+    def create_provider(provider_name: str, config: Dict) -> BaseFaceRecognitionProvider:
         """
         Create a face recognition provider instance.
 
@@ -62,10 +59,7 @@ class FaceRecognitionFactory:
 
         if provider_name not in FaceRecognitionFactory.PROVIDERS:
             available = [k for k, v in FaceRecognitionFactory.PROVIDERS.items() if v is not None]
-            raise ValueError(
-                f"Unknown provider: '{provider_name}'. "
-                f"Available providers: {', '.join(available)}"
-            )
+            raise ValueError(f"Unknown provider: '{provider_name}'. " f"Available providers: {', '.join(available)}")
 
         provider_class = FaceRecognitionFactory.PROVIDERS[provider_name]
 
@@ -99,10 +93,7 @@ class FaceRecognitionFactory:
         Returns:
             Dictionary mapping provider name to availability (True/False)
         """
-        return {
-            name: provider is not None
-            for name, provider in FaceRecognitionFactory.PROVIDERS.items()
-        }
+        return {name: provider is not None for name, provider in FaceRecognitionFactory.PROVIDERS.items()}
 
 
 # Convenience function
