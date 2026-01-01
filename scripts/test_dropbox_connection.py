@@ -1,5 +1,6 @@
 """
 Test script to verify Dropbox API connection and configuration.
+Supports both OAuth 2.0 and legacy access token authentication.
 """
 
 import logging
@@ -11,7 +12,7 @@ import yaml
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.dropbox_client import DropboxClient
+from scripts.auth import DropboxClientFactory
 
 
 def load_config(config_path: str = "config/config.yaml") -> dict:
@@ -43,19 +44,17 @@ def main():
     config = load_config()
 
     # Extract settings
-    access_token = config["dropbox"]["access_token"]
     source_folder = config["dropbox"]["source_folder"]
     image_extensions = config["processing"]["image_extensions"]
 
-    # Validate configuration
-    if access_token == "YOUR_DROPBOX_ACCESS_TOKEN_HERE":
-        print("\nError: Please update config/config.yaml with your Dropbox access token.")
-        print("See docs/DROPBOX_SETUP.md for instructions.")
-        sys.exit(1)
-
-    # Initialize Dropbox client
+    # Initialize Dropbox client using factory
     logger.info("Initializing Dropbox client...")
-    client = DropboxClient(access_token)
+    try:
+        factory = DropboxClientFactory(config)
+        client = factory.create_client()
+    except ValueError as e:
+        print(f"\n✗ Failed to create Dropbox client: {e}")
+        sys.exit(1)
 
     # Test 1: Verify connection
     print("\n[Test 1] Verifying Dropbox connection...")

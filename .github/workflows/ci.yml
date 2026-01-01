@@ -179,7 +179,15 @@ jobs:
       run: |
         cat > config/config.yaml << 'EOF'
         dropbox:
-          access_token: "${{ secrets.DROPBOX_ACCESS_TOKEN }}"
+          # OAuth 2.0 authentication (recommended)
+          app_key: "${{ secrets.DROPBOX_APP_KEY }}"
+          app_secret: "${{ secrets.DROPBOX_APP_SECRET }}"
+          refresh_token: "${{ secrets.DROPBOX_REFRESH_TOKEN }}"
+          token_storage: "config"  # CI environments can't use keyring
+
+          # Legacy fallback (if OAuth secrets not configured)
+          # access_token: "${{ secrets.DROPBOX_ACCESS_TOKEN }}"
+
           source_folder: "${{ secrets.DROPBOX_SOURCE_FOLDER }}"
           destination_folder: "${{ secrets.DROPBOX_DESTINATION_FOLDER }}"
 

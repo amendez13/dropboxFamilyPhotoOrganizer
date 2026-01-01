@@ -22,7 +22,7 @@ Automatically scan your Dropbox photos, detect a specific person using face reco
 Follow the detailed instructions in [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) to:
 - Create a Dropbox app
 - Configure permissions
-- Generate an access token
+- Set up OAuth 2.0 authentication (recommended) or use legacy access tokens
 
 ### 2. Install Dependencies
 
@@ -54,21 +54,40 @@ pip install -r requirements.txt
 cp config/config.example.yaml config/config.yaml
 
 # Edit config/config.yaml with your settings
-# - Add your Dropbox access token
+# - Add your Dropbox app key and app secret (for OAuth 2.0)
 # - Set source and destination folder paths
 # - Configure face recognition settings
 ```
 
-### 4. Test the Connection
+### 4. Authenticate with Dropbox
+
+#### Option A: OAuth 2.0 (Recommended)
+
+```bash
+# Run the authorization script
+python scripts/authorize_dropbox.py
+```
+
+This will guide you through:
+- Visiting a Dropbox authorization URL
+- Granting permissions to the app
+- Storing refresh tokens securely in your system keyring
+
+#### Option B: Legacy Access Token
+
+See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for instructions on using legacy access tokens (not recommended).
+
+### 5. Test the Connection
 
 ```bash
 python scripts/test_dropbox_connection.py
 ```
 
 This will verify:
-- Your Dropbox access token is valid
+- Your authentication is working (OAuth or legacy)
 - The source folder is accessible
 - Files can be listed and thumbnails retrieved
+- Automatic token refresh is working (OAuth mode)
 
 ## Configuration
 
@@ -76,9 +95,16 @@ All settings are managed in `config/config.yaml`:
 
 ```yaml
 dropbox:
-  access_token: "YOUR_TOKEN"
+  # OAuth 2.0 Authentication (Recommended)
+  app_key: "YOUR_APP_KEY"
+  app_secret: "YOUR_APP_SECRET"
+
+  # Or Legacy Authentication (Not recommended)
+  # access_token: "YOUR_TOKEN"
+
   source_folder: "/Photos/Family"
   destination_folder: "/Photos/PersonName"
+  token_storage: "keyring"  # 'keyring' (secure) or 'config' (less secure)
 
 face_recognition:
   reference_photos_dir: "./reference_photos"
@@ -95,11 +121,20 @@ processing:
 
 ### Key Settings
 
-- **access_token**: Your Dropbox API token (from App Console)
+**Authentication:**
+- **app_key** / **app_secret**: Dropbox app credentials for OAuth 2.0 (recommended)
+- **access_token**: Legacy access token (not recommended, tokens expire)
+- **token_storage**: Where to store refresh tokens (`keyring` for secure storage, `config` for file storage)
+
+**Folders:**
 - **source_folder**: Folder to scan for photos
 - **destination_folder**: Where matching photos will be copied/moved
+
+**Face Recognition:**
 - **reference_photos_dir**: Local folder with reference photos of the target person
 - **tolerance**: Face matching sensitivity (0.4-0.6 typical, lower = stricter)
+
+**Processing:**
 - **operation**: Operation mode - `copy` (default, safer) or `move` (destructive)
 - **log_operations**: If true, logs all operations to `operations.log`
 - **dry_run**: If true, lists matches without copying/moving files
@@ -174,32 +209,51 @@ All operations are logged to `operations.log` (unless disabled) for audit trail.
 
 ## Security Notes
 
-- **Never commit `config/config.yaml`** - it contains your access token
+- **Never commit `config/config.yaml`** - it may contain sensitive credentials
 - The `.gitignore` file excludes `config/config.yaml` by default
-- Access tokens provide full access to your Dropbox - keep them secure
-- Consider using environment variables for sensitive data in production
+- **OAuth 2.0 (recommended)**:
+  - Refresh tokens are stored in system keyring by default (secure)
+  - Can fallback to config file storage if keyring unavailable (less secure)
+  - Access tokens are auto-managed and refreshed automatically
+- **Legacy access tokens** (not recommended):
+  - Provide full access to your Dropbox - keep them secure
+  - Expire after ~4 hours with no automatic refresh
+  - Store only in `config.yaml`, never commit or share
 
 ## Troubleshooting
 
-### "Invalid access token"
-- Verify token is copied correctly from App Console
-- Regenerate token if needed
+### Authentication Issues
 
-### "Insufficient permissions" or 403 errors
+**"Invalid access token" or "Authentication failed"**
+- **OAuth mode**: Run `python scripts/authorize_dropbox.py` to re-authenticate
+- **Legacy mode**: Regenerate access token from App Console
+- Verify credentials are copied correctly
+
+**"No refresh token found"**
+- Run `python scripts/authorize_dropbox.py` to complete OAuth setup
+- If keyring unavailable, use `--force-config-storage` flag
+
+**"Insufficient permissions" or 403 errors**
 - Check app permissions in App Console → Permissions tab
 - Ensure these scopes are enabled:
   - `files.metadata.read`
   - `files.metadata.write`
   - `files.content.read`
   - `files.content.write`
-- Generate a new token after updating permissions
+- Re-run authorization after changing permissions
 
-### "Path not found"
+### Other Issues
+
+**"Path not found"**
 - Verify folder paths start with `/`
 - Check folder exists in Dropbox
 - Paths are case-sensitive
 
-See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for more troubleshooting tips.
+**Keyring not available**
+- Install keyring backend for your system (see DROPBOX_SETUP.md)
+- Or use config file storage: `python scripts/authorize_dropbox.py --force-config-storage`
+
+See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for comprehensive troubleshooting guide.
 
 ## Development
 

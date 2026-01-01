@@ -4,6 +4,9 @@ PyYAML>=6.0
 python-dateutil>=2.8.0
 numpy>=1.21.0
 
+# Secure credential storage (recommended for OAuth tokens)
+keyring>=24.0.0
+
 # Image processing (required for all providers)
 Pillow>=10.0.0
 

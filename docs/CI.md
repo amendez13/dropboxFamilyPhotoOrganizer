@@ -315,26 +315,73 @@ python -m py_compile scripts/**/*.py
 
 To enable integration tests in CI, you need to configure GitHub Secrets and Variables.
 
-### Required Secrets
+### Authentication Options
+
+The CI workflow supports **two authentication methods**. Choose one:
+
+#### Option A: OAuth 2.0 with Refresh Token (Recommended)
+
+**Benefits:**
+- ✅ Tokens never expire (auto-refresh)
+- ✅ More secure than legacy tokens
+- ✅ No manual token regeneration needed
+
+**Required Secrets:**
 
 Navigate to your repository Settings → Secrets and variables → Actions → Secrets:
 
-1. **DROPBOX_ACCESS_TOKEN**
-   - Your Dropbox API access token
-   - Get it from [Dropbox App Console](https://www.dropbox.com/developers/apps) → Your App → Settings → OAuth 2 → Generate
-   - Security: Never commit this to your repository
+1. **DROPBOX_APP_KEY**
+   - Your Dropbox app key
+   - Get it from [Dropbox App Console](https://www.dropbox.com/developers/apps) → Your App → Settings → OAuth 2
+   - Example: `abc123xyz...`
 
-2. **DROPBOX_SOURCE_FOLDER**
+2. **DROPBOX_APP_SECRET**
+   - Your Dropbox app secret
+   - Same location as app key
+   - Example: `xyz789abc...`
+
+3. **DROPBOX_REFRESH_TOKEN**
+   - Long-lived refresh token
+   - **How to get it:**
+     ```bash
+     # Run locally with --force-config-storage
+     python scripts/authorize_dropbox.py --force-config-storage
+
+     # Copy the refresh_token value from config/config.yaml
+     # Then delete it from the file for security
+     ```
+   - Example: `sl.B1a2b3c4d5...xyz`
+
+4. **DROPBOX_SOURCE_FOLDER**
    - Test folder path (e.g., `/Cargas de cámara/2013/08`)
    - Must start with `/`
    - Must exist and contain test images
    - Case-sensitive
 
-3. **DROPBOX_DESTINATION_FOLDER**
+5. **DROPBOX_DESTINATION_FOLDER**
    - Destination folder path (e.g., `/Test/CI_Organized`)
    - Must start with `/`
    - Can be created if it doesn't exist
    - Case-sensitive
+
+#### Option B: Legacy Access Token
+
+**Limitations:**
+- ⚠️ Tokens expire (~4 hours for short-lived)
+- ⚠️ No automatic refresh
+- ⚠️ Requires manual regeneration
+
+**Required Secrets:**
+
+1. **DROPBOX_ACCESS_TOKEN**
+   - Your Dropbox API access token
+   - Get it from [Dropbox App Console](https://www.dropbox.com/developers/apps) → Your App → Settings → OAuth 2 → Generate
+   - Security: Never commit this to your repository
+   - **Note:** You'll need to update the CI workflow to use legacy auth (comment out OAuth lines, uncomment access_token line)
+
+2. **DROPBOX_SOURCE_FOLDER** (same as above)
+
+3. **DROPBOX_DESTINATION_FOLDER** (same as above)
 
 ### Required Variable
 
@@ -407,6 +454,17 @@ To disable integration tests:
 
 ### Example Values
 
+**OAuth 2.0 Setup (Recommended):**
+```
+DROPBOX_APP_KEY: abc123xyz789
+DROPBOX_APP_SECRET: xyz789abc123
+DROPBOX_REFRESH_TOKEN: sl.B1a2b3c4d5...xyz
+DROPBOX_SOURCE_FOLDER: /Cargas de cámara/2013/08
+DROPBOX_DESTINATION_FOLDER: /Test/CI_Organized
+RUN_INTEGRATION_TESTS: true
+```
+
+**Legacy Access Token Setup:**
 ```
 DROPBOX_ACCESS_TOKEN: sl.B1a2b3c4d5...xyz
 DROPBOX_SOURCE_FOLDER: /Cargas de cámara/2013/08
@@ -414,7 +472,7 @@ DROPBOX_DESTINATION_FOLDER: /Test/CI_Organized
 RUN_INTEGRATION_TESTS: true
 ```
 
-**Note:** The example token is fake. Use your actual token.
+**Note:** The example tokens are fake. Use your actual credentials.
 
 ## CI Status Badge
 

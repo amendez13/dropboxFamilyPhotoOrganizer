@@ -2,14 +2,25 @@
 # Copy this file to config.yaml and fill in your values
 
 dropbox:
-  # Your Dropbox app access token (see DROPBOX_SETUP.md for instructions)
-  access_token: "YOUR_DROPBOX_ACCESS_TOKEN_HERE"
+  # OAuth 2.0 Authentication (Recommended - supports automatic token refresh)
+  # Run 'python scripts/authorize_dropbox.py' to get these values
+  app_key: "YOUR_DROPBOX_APP_KEY_HERE"
+  app_secret: "YOUR_DROPBOX_APP_SECRET_HERE"  # Optional but recommended
+
+  # Legacy Authentication (Not recommended - tokens expire without refresh)
+  # Use either OAuth OR access_token, not both
+  # access_token: "YOUR_DROPBOX_ACCESS_TOKEN_HERE"
 
   # Source folder path in Dropbox (e.g., "/Photos/Family" or "/Camera Uploads")
   source_folder: "/path/to/source/folder"
 
   # Destination folder for photos with the target person
   destination_folder: "/path/to/destination/folder"
+
+  # Token storage mode: 'keyring' (secure) or 'config' (less secure)
+  # keyring: Stores refresh token in system keyring (recommended)
+  # config: Stores refresh token in this config file (not recommended for shared systems)
+  token_storage: "keyring"
 
 face_recognition:
   # Provider to use: 'local', 'aws', or 'azure'
