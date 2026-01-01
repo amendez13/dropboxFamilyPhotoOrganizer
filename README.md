@@ -257,6 +257,29 @@ See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for comprehensive troubleshoo
 
 ## Development
 
+### Pre-commit Hooks (Optional but Recommended)
+
+Install pre-commit hooks to automatically check code before commits:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run manually on all files
+pre-commit run --all-files
+```
+
+These hooks will automatically:
+- Format code with Black
+- Sort imports with isort
+- Check for linting errors
+- Scan for security issues
+- Validate YAML files
+- Prevent committing secrets
+
 ### Running Tests Locally
 
 ```bash
