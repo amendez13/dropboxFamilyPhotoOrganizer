@@ -49,6 +49,9 @@ The following tasks were identified through a comprehensive architecture review.
 | **P2** | [#24](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/24) | Implement Content Hash-Based Duplicate Detection | Enhancement | Low | Medium | Phase 2 | 🔲 |
 | **P2** | [#28](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/28) | Address Race Condition in Audit Logging | Reliability | Low | Medium | Phase 2 | 🔲 |
 | **P2** | [#29](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/29) | Prevent Log Injection Vulnerability in Audit Logging | Security | Low | Medium | Phase 2 | 🔲 |
+| **P2** | [#33](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/33) | Enforce flake8 Checks: Remove --exit-zero Flag and Fix Warnings | Code Quality | Low | Medium | Phase 2 | 🔲 |
+| **P2** | [#34](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/34) | Enforce mypy Type Checking: Remove \|\| true and Fix Type Errors | Code Quality | Medium | Medium | Phase 2 | 🔲 |
+| **P2** | [#35](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/35) | Make Security Checks Blocking: Enforce bandit and safety Scans | Security | Low | High | Phase 2 | 🔲 |
 | **P3** | [#25](https://github.com/amendez13/dropboxFamilyPhotoOrganizer/issues/25) | Implement Concurrent Processing with AsyncIO and Multiprocessing | Performance | High | Medium | Phase 3 | 🔲 |
 
 ## Tasks by Category
@@ -144,18 +147,37 @@ Critical security improvements that must be implemented before production use:
     - Photos per minute, API calls per photo
     - Memory usage monitoring
 
+### Code Quality & CI Enforcement (P2)
+16. **[#33] Enforce flake8 Checks**
+    - Remove --exit-zero flag from CI pipeline
+    - Fix all PEP 8 style violations
+    - Enforce code complexity and line length standards
+    - Follow-up to CI/CD pipeline implementation
+
+17. **[#34] Enforce mypy Type Checking**
+    - Remove || true bypass from CI pipeline
+    - Fix all type errors in strict mode
+    - Add type hints to public functions and classes
+    - Improve code quality and IDE support
+
+18. **[#35] Make Security Checks Blocking**
+    - Remove || true from bandit and safety checks
+    - Address all security warnings
+    - Consider migration to pip-audit
+    - Prevent introduction of new vulnerabilities
+
 ### Enhancements (P2-P3)
-16. **[#18] HEIC Support**
+19. **[#18] HEIC Support**
     - Add proper HEIC support or document limitation
     - Dependencies: `pillow-heif>=0.10.0`
     - Important for iPhone photos
 
-17. **[#24] Duplicate Detection**
+20. **[#24] Duplicate Detection**
     - Content hash-based deduplication
     - Skip previously processed files
     - Detect duplicates in current run
 
-18. **[#25] Concurrent Processing** (P3)
+21. **[#25] Concurrent Processing** (P3)
     - Async I/O for downloads
     - Multiprocessing for face detection
     - 3-5x performance improvement target
@@ -178,23 +200,26 @@ Implement these alongside face recognition development:
 7. [#21] Configuration Validation
 8. [#22] Structured Logging
 9. [#13] Comprehensive Test Suite (ongoing)
+10. [#33] Enforce flake8 Checks (CI quality enforcement)
+11. [#34] Enforce mypy Type Checking (CI quality enforcement)
+12. [#35] Make Security Checks Blocking (CI security enforcement)
 
 ### Phase 2 Enhancements
 After basic face recognition works:
 
-10. [#16] Two-Pass Face Recognition
-11. [#17] Multiple Reference Photo Handling
-12. [#19] Copy vs Move Strategy ✅ (Completed in PR #27)
-13. [#28] Race Condition in Audit Logging
-14. [#29] Log Injection Prevention
-15. [#18] HEIC Support
-16. [#24] Duplicate Detection
-17. [#23] Performance Benchmarks
+13. [#16] Two-Pass Face Recognition
+14. [#17] Multiple Reference Photo Handling
+15. [#19] Copy vs Move Strategy ✅ (Completed in PR #27)
+16. [#28] Race Condition in Audit Logging
+17. [#29] Log Injection Prevention
+18. [#18] HEIC Support
+19. [#24] Duplicate Detection
+20. [#23] Performance Benchmarks
 
 ### Phase 3 Optimization
 Final polish for production readiness:
 
-18. [#25] Concurrent Processing
+21. [#25] Concurrent Processing
 
 ## Progress Tracking
 
