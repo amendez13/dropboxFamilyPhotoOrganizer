@@ -12,6 +12,8 @@ import dropbox
 from dropbox.exceptions import ApiError, AuthError
 from dropbox.files import FileMetadata, FolderMetadata, WriteMode
 
+from scripts.auth.constants import DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS
+
 
 class DropboxClient:
     """Client for interacting with Dropbox API."""
@@ -36,8 +38,10 @@ class DropboxClient:
             refresh_token: OAuth 2.0 refresh token (recommended)
             app_key: Dropbox app key (required for OAuth mode)
             app_secret: Dropbox app secret (optional, for additional security)
-            token_refresh_callback: Function to call when token is refreshed
-                                   Should accept (access_token, expires_at) as args
+            token_refresh_callback: Function to call when token is refreshed.
+                                   Should accept (access_token, expires_at) as args.
+                                   Note: Only called during verify_connection(), not
+                                   during normal API operations.
 
         Raises:
             ValueError: If neither access_token nor refresh_token is provided
@@ -84,11 +88,24 @@ class DropboxClient:
 
         Returns:
             Current access token, or None if unavailable
+
+        Note:
+            In OAuth mode, this accesses a private SDK attribute (_oauth2_access_token).
+            This is necessary because the Dropbox SDK doesn't expose the current access
+            token via public API. If this breaks in future SDK versions, the method
+            will gracefully return None.
         """
         if self.auth_mode == "oauth":
-            # In OAuth mode, the SDK manages the token internally
-            # We need to access the private attribute to get it
-            return self.dbx._oauth2_access_token
+            # Access private SDK attribute with defensive fallback
+            # The SDK doesn't provide a public API for the current access token
+            try:
+                return getattr(self.dbx, "_oauth2_access_token", None)
+            except AttributeError:
+                self.logger.warning(
+                    "Unable to access SDK access token. "
+                    "This may indicate a Dropbox SDK version incompatibility."
+                )
+                return None
         else:
             return self.access_token
 
@@ -97,6 +114,19 @@ class DropboxClient:
         Verify the Dropbox connection and access token.
 
         In OAuth mode, this will automatically refresh the token if expired.
+
+        IMPORTANT - Token Refresh Callback Limitation:
+        The token_refresh_callback is only triggered during this verify_connection()
+        call, not during normal API operations (list_folder, download_file, etc.).
+
+        This is because the Dropbox SDK handles token refresh automatically and
+        internally during API calls, without exposing the refreshed token. We can
+        only detect and expose token changes by explicitly checking before/after
+        an API call, which we do here in verify_connection().
+
+        For most use cases, this is sufficient - call verify_connection() periodically
+        or before long-running operations to ensure tokens are fresh and saved.
+        The automatic refresh during normal API calls will continue to work regardless.
 
         Returns:
             True if connection is valid, False otherwise
@@ -113,7 +143,7 @@ class DropboxClient:
                     self.access_token = current_token
                     import time
 
-                    expires_at = str(int(time.time()) + 14400)  # 4 hours
+                    expires_at = str(int(time.time()) + DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS)
                     self.token_refresh_callback(current_token, expires_at)
 
             return True
