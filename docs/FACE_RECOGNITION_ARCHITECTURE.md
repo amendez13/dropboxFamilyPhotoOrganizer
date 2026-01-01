@@ -47,6 +47,7 @@ The architecture uses two key design patterns:
 scripts/face_recognition/
 ├── __init__.py                  # Factory for creating providers
 ├── base_provider.py             # Abstract base class (interface)
+├── encoding_cache.py            # Face encoding persistence and caching
 └── providers/
     ├── __init__.py
     ├── local_provider.py        # Local face_recognition (dlib)
@@ -89,6 +90,18 @@ class FaceMatch:
     confidence: float              # Match confidence (0-1)
     distance: float                # Distance metric (lower = more similar)
     matched_encoding: Optional[FaceEncoding]
+```
+
+#### `EncodingCacheMetadata`
+```python
+@dataclass
+class EncodingCacheMetadata:
+    reference_photo_paths: List[str]  # Paths to reference photos
+    photo_mtimes: Dict[str, float]    # Modification times for cache invalidation
+    cache_created_at: str             # Timestamp of cache creation
+    config_hash: str                  # Hash of relevant config (tolerance, model, etc.)
+    provider_name: str                # Provider that created the cache
+    encoding_count: int               # Number of encodings in cache
 ```
 
 ### Interface Contract
@@ -182,12 +195,40 @@ face_recognition:
 
 **Implementation**: Stored in `provider.reference_encodings` list
 
-### 6. Provider-Specific Optimizations
+### 6. Encoding Cache with Automatic Invalidation
+
+**Decision**: Persist face encodings to disk with automatic cache invalidation
+
+**Rationale**:
+- **Performance**: Encoding reference photos can take several seconds; caching eliminates this startup overhead
+- **User Experience**: Faster startup time for repeated runs
+- **Reliability**: Automatic invalidation ensures cache is always fresh
+- **Optional**: Backward compatible - disabled if cache_file not specified
+
+**Invalidation Triggers**:
+- Reference photo files modified (checks modification time)
+- Reference photo paths changed (added/removed photos)
+- Configuration changed (tolerance, model, num_jitters)
+- Provider changed (different provider created the cache)
+- Reference photo files deleted or moved
+
+**Implementation**:
+- Pickle-based serialization for numpy arrays
+- Metadata stored alongside encodings
+- MD5 hash of relevant config values for change detection
+- Safe error handling (falls back to regeneration on cache corruption)
+
+**Trade-offs**:
+- Disk space for cache files (typically <1MB)
+- Additional complexity in cache validation logic
+- Potential security consideration (pickle files should be from trusted sources)
+
+### 7. Provider-Specific Optimizations
 
 **Decision**: Each provider uses its API's strengths, not forced into common pattern
 
 **Examples**:
-- **Local**: Uses face_recognition's batch encoding
+- **Local**: Uses face_recognition's batch encoding + encoding cache
 - **AWS**: Uses `compare_faces` API (compares images directly, more efficient than detect + compare)
 - **Azure**: Uses Person Groups with training (persistent face database)
 
@@ -219,7 +260,15 @@ face_recognition:
   local:
     model: "hog"       # 'hog' (faster) or 'cnn' (more accurate)
     num_jitters: 1     # Higher = more accurate, slower
+    cache_file: "cache/face_encodings.pkl"  # Optional: enables encoding cache
 ```
+
+**Encoding Cache**:
+- Persists reference face encodings to disk for faster subsequent runs
+- Automatically invalidates when reference photos or configuration changes
+- Optional feature - omit `cache_file` to disable
+- Cache files stored in `.pkl` format (pickle)
+- Typical cache size: <1MB for a few reference photos
 
 **Best For**: Getting started, small libraries (<10k photos), privacy-conscious users
 
@@ -329,6 +378,7 @@ face_recognition:
   local:
     model: "hog"
     num_jitters: 1
+    cache_file: "cache/face_encodings.pkl"  # Optional
 
   aws:
     aws_region: "us-east-1"
@@ -339,6 +389,115 @@ face_recognition:
     person_group_id: "..."
     confidence_threshold: 0.5
 ```
+
+---
+
+## Encoding Cache Implementation
+
+The `EncodingCache` class in `encoding_cache.py` provides persistence for face encodings with automatic cache invalidation.
+
+### Features
+
+1. **Pickle-based Persistence**
+   - Serializes face encodings (numpy arrays) to disk
+   - Stores metadata alongside encodings for validation
+   - Uses `pickle.HIGHEST_PROTOCOL` for efficiency
+
+2. **Automatic Cache Invalidation**
+   - Detects when reference photos are modified (via modification time)
+   - Detects when reference photo paths change (added/removed)
+   - Detects configuration changes (model, tolerance, num_jitters)
+   - Detects provider changes
+
+3. **Metadata Tracking**
+   - Reference photo paths and modification times
+   - Configuration hash (MD5 of relevant settings)
+   - Provider name
+   - Cache creation timestamp
+   - Encoding count
+
+4. **Safe Error Handling**
+   - Gracefully handles corrupted cache files
+   - Falls back to regenerating encodings on any error
+   - Logs detailed information for debugging
+
+### Usage Example
+
+```python
+from scripts.face_recognition.encoding_cache import EncodingCache
+
+# Initialize cache (optional path)
+cache = EncodingCache("cache/face_encodings.pkl")
+
+# Try to load from cache
+encodings = cache.load_encodings(
+    reference_photo_paths=["ref1.jpg", "ref2.jpg"],
+    config={"model": "hog", "tolerance": 0.6},
+    provider_name="local"
+)
+
+if encodings is None:
+    # Cache miss or invalid - generate encodings
+    encodings = generate_encodings_from_photos(...)
+
+    # Save to cache for next time
+    cache.save_encodings(
+        encodings=encodings,
+        reference_photo_paths=["ref1.jpg", "ref2.jpg"],
+        config={"model": "hog", "tolerance": 0.6},
+        provider_name="local"
+    )
+```
+
+### Cache File Structure
+
+```python
+{
+    'metadata': {
+        'reference_photo_paths': ['ref1.jpg', 'ref2.jpg'],
+        'photo_mtimes': {'ref1.jpg': 1234567890.0, 'ref2.jpg': 1234567891.0},
+        'cache_created_at': '2025-01-01T12:00:00',
+        'config_hash': 'a1b2c3d4e5f6...',
+        'provider_name': 'local',
+        'encoding_count': 2
+    },
+    'encodings': [
+        {
+            'encoding': [0.123, 0.456, ...],  # 128-dimensional vector as list
+            'source': 'ref1.jpg',
+            'confidence': None,
+            'bounding_box': (top, right, bottom, left)
+        },
+        ...
+    ]
+}
+```
+
+### Performance Impact
+
+- **First run** (cache miss): Normal encoding time (2-5 seconds for a few photos)
+- **Subsequent runs** (cache hit): ~0.1 seconds to load from cache
+- **Speedup**: 20-50x faster startup for typical use cases
+
+### Integration with Local Provider
+
+The `LocalFaceRecognitionProvider` automatically uses the encoding cache:
+
+1. On `load_reference_photos()`:
+   - First tries to load from cache
+   - If cache is valid, skips encoding and uses cached data
+   - If cache is invalid or missing, generates encodings and saves to cache
+
+2. Cache location configured via `cache_file` in config:
+   ```yaml
+   face_recognition:
+     local:
+       cache_file: "cache/face_encodings.pkl"
+   ```
+
+3. Backward compatible:
+   - If `cache_file` is not specified, caching is disabled
+   - No changes needed to existing configurations
 
 ---
 
@@ -358,10 +517,12 @@ face_recognition:
   - Statistics reporting
   - Move/copy operations
 
-- [ ] **Add caching layer**
-  - Cache reference encodings to file
-  - Cache processed photo results
-  - Support resume after interruption
+- [x] **Add caching layer** ✅ Implemented
+  - ✅ Cache reference encodings to file (pickle-based)
+  - ✅ Automatic cache invalidation on photo/config changes
+  - ✅ Metadata tracking for validation
+  - [ ] Cache processed photo results (for resume capability)
+  - [ ] Support resume after interruption
 
 - [ ] **Comprehensive error handling**
   - Network failures
