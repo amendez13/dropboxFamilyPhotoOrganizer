@@ -24,6 +24,7 @@ from scripts.face_recognition.base_provider import (
     FaceEncoding,
     FaceMatch
 )
+from scripts.face_recognition.encoding_cache import EncodingCache
 
 
 class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -51,6 +52,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 - model: 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
                 - num_jitters: Number of times to re-sample face for encoding (default: 1)
                 - tolerance: Default matching tolerance (default: 0.6)
+                - cache_file: Path to cache file for persisting encodings (optional)
         """
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
@@ -64,6 +66,10 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         self.model = config.get('model', 'hog')  # 'hog' or 'cnn'
         self.num_jitters = config.get('num_jitters', 1)
         self.default_tolerance = config.get('tolerance', 0.6)
+
+        # Initialize encoding cache
+        cache_file = config.get('cache_file')
+        self.encoding_cache = EncodingCache(cache_file)
 
     def get_provider_name(self) -> str:
         """Get provider name."""
@@ -82,6 +88,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
     def load_reference_photos(self, photo_paths: List[str]) -> int:
         """
         Load reference photos and extract face encodings.
+        Uses cache if available and valid, otherwise generates new encodings.
 
         Args:
             photo_paths: List of paths to reference photos
@@ -89,6 +96,22 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         Returns:
             Number of faces successfully encoded
         """
+        # Try to load from cache first
+        cached_encodings = self.encoding_cache.load_encodings(
+            photo_paths,
+            self.config,
+            self.get_provider_name()
+        )
+
+        if cached_encodings is not None:
+            self.reference_encodings = cached_encodings
+            self.logger.info(
+                f"Loaded {len(self.reference_encodings)} reference face(s) from cache"
+            )
+            return len(self.reference_encodings)
+
+        # Cache miss - generate encodings from reference photos
+        self.logger.info("Generating face encodings from reference photos...")
         self.reference_encodings = []
 
         for photo_path in photo_paths:
@@ -135,7 +158,16 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         if len(self.reference_encodings) == 0:
             raise Exception("No reference faces could be loaded")
 
-        self.logger.info(f"Loaded {len(self.reference_encodings)} reference face(s)")
+        self.logger.info(f"Generated {len(self.reference_encodings)} reference face(s)")
+
+        # Save to cache for future use
+        self.encoding_cache.save_encodings(
+            self.reference_encodings,
+            photo_paths,
+            self.config,
+            self.get_provider_name()
+        )
+
         return len(self.reference_encodings)
 
     def detect_faces(self, image_data: bytes, source: str = "unknown") -> List[FaceEncoding]:
