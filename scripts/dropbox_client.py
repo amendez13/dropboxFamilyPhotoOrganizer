@@ -1,6 +1,7 @@
 """
 Dropbox API client for photo organization.
 Handles authentication, file listing, downloading, and moving files.
+Supports both legacy access tokens and OAuth 2.0 with automatic token refresh.
 """
 
 import logging
@@ -15,20 +16,87 @@ from dropbox.files import FileMetadata, FolderMetadata, WriteMode
 class DropboxClient:
     """Client for interacting with Dropbox API."""
 
-    def __init__(self, access_token: str):
+    def __init__(
+        self,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        app_key: Optional[str] = None,
+        app_secret: Optional[str] = None,
+        token_refresh_callback: Optional[callable] = None,
+    ):
         """
         Initialize Dropbox client.
 
+        Supports two authentication modes:
+        1. Legacy: Direct access token (will expire, no auto-refresh)
+        2. OAuth 2.0: Refresh token with automatic token refresh
+
         Args:
-            access_token: Dropbox API access token
+            access_token: Direct access token (legacy mode)
+            refresh_token: OAuth 2.0 refresh token (recommended)
+            app_key: Dropbox app key (required for OAuth mode)
+            app_secret: Dropbox app secret (optional, for additional security)
+            token_refresh_callback: Function to call when token is refreshed
+                                   Should accept (access_token, expires_at) as args
+
+        Raises:
+            ValueError: If neither access_token nor refresh_token is provided
         """
-        self.access_token = access_token
-        self.dbx = dropbox.Dropbox(access_token)
         self.logger = logging.getLogger(__name__)
+
+        # Validate authentication parameters
+        if not access_token and not refresh_token:
+            raise ValueError("Either access_token or refresh_token must be provided")
+
+        if refresh_token and not app_key:
+            raise ValueError("app_key is required when using refresh_token")
+
+        self.app_key = app_key
+        self.app_secret = app_secret
+        self.token_refresh_callback = token_refresh_callback
+
+        # Initialize Dropbox client
+        if refresh_token:
+            # OAuth 2.0 mode with automatic token refresh
+            self.logger.info("Initializing Dropbox client with OAuth 2.0 refresh token")
+            self.dbx = dropbox.Dropbox(
+                oauth2_refresh_token=refresh_token,
+                app_key=app_key,
+                app_secret=app_secret,
+            )
+            self.auth_mode = "oauth"
+            self.refresh_token = refresh_token
+            self.access_token = None  # Will be set after first API call
+        else:
+            # Legacy mode with direct access token
+            self.logger.info("Initializing Dropbox client with legacy access token")
+            self.logger.warning("Using legacy access token. Consider migrating to OAuth 2.0 with refresh tokens.")
+            self.dbx = dropbox.Dropbox(access_token)
+            self.auth_mode = "legacy"
+            self.access_token = access_token
+            self.refresh_token = None
+
+    def get_current_access_token(self) -> Optional[str]:
+        """
+        Get the current access token.
+
+        In OAuth mode, this triggers a refresh if needed and returns the new token.
+
+        Returns:
+            Current access token, or None if unavailable
+        """
+        if self.auth_mode == "oauth":
+            # In OAuth mode, the SDK manages the token internally
+            # We need to access the private attribute to get it
+            return self.dbx._oauth2_access_token
+        else:
+            return self.access_token
 
     def verify_connection(self) -> bool:
         """
         Verify the Dropbox connection and access token.
+
+        In OAuth mode, this will automatically refresh the token if expired.
 
         Returns:
             True if connection is valid, False otherwise
@@ -36,6 +104,18 @@ class DropboxClient:
         try:
             account = self.dbx.users_get_current_account()
             self.logger.info(f"Connected to Dropbox account: {account.email}")
+
+            # If in OAuth mode and we have a callback, notify about token refresh
+            if self.auth_mode == "oauth" and self.token_refresh_callback:
+                current_token = self.get_current_access_token()
+                if current_token and current_token != self.access_token:
+                    # Token was refreshed
+                    self.access_token = current_token
+                    import time
+
+                    expires_at = str(int(time.time()) + 14400)  # 4 hours
+                    self.token_refresh_callback(current_token, expires_at)
+
             return True
         except AuthError as e:
             self.logger.error(f"Authentication failed: {e}")
