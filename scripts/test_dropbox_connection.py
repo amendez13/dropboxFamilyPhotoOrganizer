@@ -2,9 +2,10 @@
 Test script to verify Dropbox API connection and configuration.
 """
 
-import sys
-import os
 import logging
+import os
+import sys
+
 import yaml
 
 # Add parent directory to path to import modules
@@ -16,7 +17,7 @@ from scripts.dropbox_client import DropboxClient
 def load_config(config_path: str = "config/config.yaml") -> dict:
     """Load configuration from YAML file."""
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         print(f"Error: Configuration file '{config_path}' not found.")
@@ -30,10 +31,7 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
 def main():
     """Test Dropbox connection and list files."""
     # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
 
     print("=" * 60)
@@ -45,9 +43,9 @@ def main():
     config = load_config()
 
     # Extract settings
-    access_token = config['dropbox']['access_token']
-    source_folder = config['dropbox']['source_folder']
-    image_extensions = config['processing']['image_extensions']
+    access_token = config["dropbox"]["access_token"]
+    source_folder = config["dropbox"]["source_folder"]
+    image_extensions = config["processing"]["image_extensions"]
 
     # Validate configuration
     if access_token == "YOUR_DROPBOX_ACCESS_TOKEN_HERE":
@@ -103,7 +101,7 @@ def main():
         try:
             # Get first file for testing
             first_file = next(client.list_folder_recursive(source_folder, image_extensions))
-            thumbnail_size = config['face_recognition']['thumbnail_size']
+            thumbnail_size = config["face_recognition"]["thumbnail_size"]
 
             print(f"Getting thumbnail for: {first_file.name}")
             thumbnail_data = client.get_thumbnail(first_file.path_display, size=thumbnail_size)

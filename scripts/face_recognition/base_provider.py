@@ -4,14 +4,16 @@ Defines the interface that all face recognition providers must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 
 
 @dataclass
 class FaceEncoding:
     """Represents a face encoding with metadata."""
+
     encoding: np.ndarray
     source: str  # Source file path or identifier
     confidence: Optional[float] = None
@@ -21,9 +23,10 @@ class FaceEncoding:
 @dataclass
 class FaceMatch:
     """Represents a face match result."""
+
     is_match: bool
     confidence: float  # 0.0 to 1.0
-    distance: float    # Distance metric (lower = more similar)
+    distance: float  # Distance metric (lower = more similar)
     matched_encoding: Optional[FaceEncoding] = None
 
 
@@ -74,11 +77,7 @@ class BaseFaceRecognitionProvider(ABC):
         pass
 
     @abstractmethod
-    def compare_faces(
-        self,
-        face_encoding: FaceEncoding,
-        tolerance: float = 0.6
-    ) -> FaceMatch:
+    def compare_faces(self, face_encoding: FaceEncoding, tolerance: float = 0.6) -> FaceMatch:
         """
         Compare a face encoding against reference encodings.
 
@@ -92,10 +91,7 @@ class BaseFaceRecognitionProvider(ABC):
         pass
 
     def find_matches_in_image(
-        self,
-        image_data: bytes,
-        source: str = "unknown",
-        tolerance: float = 0.6
+        self, image_data: bytes, source: str = "unknown", tolerance: float = 0.6
     ) -> Tuple[List[FaceMatch], int]:
         """
         Detect faces in an image and check for matches against reference faces.

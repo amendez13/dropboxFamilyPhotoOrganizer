@@ -3,12 +3,13 @@ Dropbox API client for photo organization.
 Handles authentication, file listing, downloading, and moving files.
 """
 
-import os
 import logging
-from typing import List, Dict, Optional, Generator
+import os
+from typing import Dict, Generator, List, Optional
+
 import dropbox
-from dropbox.files import FileMetadata, FolderMetadata, WriteMode
 from dropbox.exceptions import ApiError, AuthError
+from dropbox.files import FileMetadata, FolderMetadata, WriteMode
 
 
 class DropboxClient:
@@ -44,9 +45,7 @@ class DropboxClient:
             return False
 
     def list_folder_recursive(
-        self,
-        folder_path: str,
-        extensions: Optional[List[str]] = None
+        self, folder_path: str, extensions: Optional[List[str]] = None
     ) -> Generator[FileMetadata, None, None]:
         """
         List all files in a folder recursively.
@@ -61,10 +60,10 @@ class DropboxClient:
         """
         try:
             # Normalize folder path
-            if folder_path and not folder_path.startswith('/'):
-                folder_path = '/' + folder_path
-            if folder_path == '/':
-                folder_path = ''
+            if folder_path and not folder_path.startswith("/"):
+                folder_path = "/" + folder_path
+            if folder_path == "/":
+                folder_path = ""
 
             self.logger.info(f"Listing files in: {folder_path or '/'}")
 
@@ -131,7 +130,7 @@ class DropboxClient:
             metadata, response = self.dbx.files_download(dropbox_path)
 
             # Write to local file
-            with open(local_path, 'wb') as f:
+            with open(local_path, "wb") as f:
                 f.write(response.content)
 
             return True
@@ -140,12 +139,7 @@ class DropboxClient:
             self.logger.error(f"Error downloading file '{dropbox_path}': {e}")
             return False
 
-    def get_thumbnail(
-        self,
-        dropbox_path: str,
-        size: str = "w256h256",
-        format: str = "jpeg"
-    ) -> Optional[bytes]:
+    def get_thumbnail(self, dropbox_path: str, size: str = "w256h256", format: str = "jpeg") -> Optional[bytes]:
         """
         Get a thumbnail of an image file.
 
@@ -183,11 +177,7 @@ class DropboxClient:
             size_enum = size_map.get(size, ThumbnailSize.w256h256)
             format_enum = format_map.get(format, ThumbnailFormat.jpeg)
 
-            metadata, response = self.dbx.files_get_thumbnail(
-                dropbox_path,
-                format=format_enum,
-                size=size_enum
-            )
+            metadata, response = self.dbx.files_get_thumbnail(dropbox_path, format=format_enum, size=size_enum)
 
             return response.content
 
@@ -195,13 +185,7 @@ class DropboxClient:
             self.logger.warning(f"Could not get thumbnail for '{dropbox_path}': {e}")
             return None
 
-    def copy_file(
-        self,
-        source_path: str,
-        dest_path: str,
-        autorename: bool = True,
-        allow_shared_folder: bool = False
-    ) -> bool:
+    def copy_file(self, source_path: str, dest_path: str, autorename: bool = True, allow_shared_folder: bool = False) -> bool:
         """
         Copy a file to a different location in Dropbox.
 
@@ -218,10 +202,7 @@ class DropboxClient:
             self.logger.info(f"Copying: {source_path} -> {dest_path}")
 
             result = self.dbx.files_copy_v2(
-                source_path,
-                dest_path,
-                autorename=autorename,
-                allow_shared_folder=allow_shared_folder
+                source_path, dest_path, autorename=autorename, allow_shared_folder=allow_shared_folder
             )
 
             self.logger.debug(f"Copied successfully: {result.metadata.name}")
@@ -231,13 +212,7 @@ class DropboxClient:
             self.logger.error(f"Error copying file '{source_path}': {e}")
             return False
 
-    def move_file(
-        self,
-        source_path: str,
-        dest_path: str,
-        autorename: bool = True,
-        allow_shared_folder: bool = False
-    ) -> bool:
+    def move_file(self, source_path: str, dest_path: str, autorename: bool = True, allow_shared_folder: bool = False) -> bool:
         """
         Move a file to a different location in Dropbox.
 
@@ -254,10 +229,7 @@ class DropboxClient:
             self.logger.info(f"Moving: {source_path} -> {dest_path}")
 
             result = self.dbx.files_move_v2(
-                source_path,
-                dest_path,
-                autorename=autorename,
-                allow_shared_folder=allow_shared_folder
+                source_path, dest_path, autorename=autorename, allow_shared_folder=allow_shared_folder
             )
 
             self.logger.debug(f"Moved successfully: {result.metadata.name}")
