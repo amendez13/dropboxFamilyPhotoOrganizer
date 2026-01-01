@@ -154,8 +154,8 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    # Only run if we have the Dropbox access token secret configured
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RUN_INTEGRATION_TESTS == 'true'
+    # Run on PRs and main branch pushes when integration tests are enabled
+    if: vars.RUN_INTEGRATION_TESTS == 'true'
 
     steps:
     - name: Checkout code
