@@ -144,8 +144,7 @@ class OAuthManager:
 
             if not access_token:
                 raise RuntimeError(
-                    "Unable to retrieve access token from Dropbox SDK. "
-                    "This may indicate an SDK version incompatibility."
+                    "Unable to retrieve access token from Dropbox SDK. " "This may indicate an SDK version incompatibility."
                 )
 
             # Calculate new expiry (Dropbox access tokens typically last 4 hours)

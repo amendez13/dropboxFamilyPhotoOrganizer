@@ -1,18 +1,18 @@
 """Unit tests for OAuth 2.0 authentication functionality."""
 
 import json
+import sys
 import time
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-import sys
-from pathlib import Path
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from scripts.auth.oauth_manager import OAuthManager, TokenStorage
-from scripts.auth.client_factory import DropboxClientFactory
+from scripts.auth.client_factory import DropboxClientFactory  # noqa: E402
+from scripts.auth.oauth_manager import OAuthManager, TokenStorage  # noqa: E402
 
 
 class TestOAuthManager:
@@ -25,7 +25,7 @@ class TestOAuthManager:
         assert manager.app_secret == "test_secret"
         assert manager.logger is not None
 
-    @patch('scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect')
+    @patch("scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect")
     def test_start_authorization_flow_success(self, mock_flow_class):
         """Test successful authorization flow start."""
         mock_flow = Mock()
@@ -43,9 +43,9 @@ class TestOAuthManager:
             token_access_type="offline",
         )
         mock_flow.start.assert_called_once()
-        assert hasattr(manager, '_auth_flow')
+        assert hasattr(manager, "_auth_flow")
 
-    @patch('scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect')
+    @patch("scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect")
     def test_start_authorization_flow_failure(self, mock_flow_class):
         """Test authorization flow start failure."""
         mock_flow_class.side_effect = Exception("Network error")
@@ -54,7 +54,7 @@ class TestOAuthManager:
         with pytest.raises(Exception, match="Network error"):
             manager.start_authorization_flow()
 
-    @patch('scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect')
+    @patch("scripts.auth.oauth_manager.DropboxOAuth2FlowNoRedirect")
     def test_complete_authorization_flow_success(self, mock_flow_class):
         """Test successful authorization flow completion."""
         mock_oauth_result = Mock()
@@ -69,7 +69,7 @@ class TestOAuthManager:
         manager = OAuthManager(app_key="test_key")
         manager.start_authorization_flow()
 
-        with patch('time.time', return_value=1000000):
+        with patch("time.time", return_value=1000000):
             tokens = manager.complete_authorization_flow("test_auth_code")
 
         assert tokens["access_token"] == "test_access_token"
@@ -77,7 +77,7 @@ class TestOAuthManager:
         assert tokens["account_id"] == "test_account_id"
         assert tokens["expires_at"] == str(1000000 + 14400)  # 4 hours = 14400 seconds
         mock_flow.finish.assert_called_once_with("test_auth_code")
-        assert not hasattr(manager, '_auth_flow')  # Should be cleaned up
+        assert not hasattr(manager, "_auth_flow")  # Should be cleaned up
 
     def test_complete_authorization_flow_without_start(self):
         """Test completing authorization flow without starting it first."""
@@ -87,14 +87,14 @@ class TestOAuthManager:
 
     def test_refresh_access_token_success(self):
         """Test successful access token refresh."""
-        with patch('dropbox.Dropbox') as mock_dropbox_class:
+        with patch("dropbox.Dropbox") as mock_dropbox_class:
             mock_dbx = Mock()
             mock_dbx._oauth2_access_token = "new_access_token"
             mock_dropbox_class.return_value = mock_dbx
 
             manager = OAuthManager(app_key="test_key", app_secret="test_secret")
 
-            with patch('time.time', return_value=2000000):
+            with patch("time.time", return_value=2000000):
                 result = manager.refresh_access_token("test_refresh_token")
 
             assert result["access_token"] == "new_access_token"
@@ -108,10 +108,10 @@ class TestOAuthManager:
 
     def test_refresh_access_token_no_token_attribute(self):
         """Test refresh when SDK doesn't have _oauth2_access_token attribute."""
-        with patch('dropbox.Dropbox') as mock_dropbox_class:
+        with patch("dropbox.Dropbox") as mock_dropbox_class:
             mock_dbx = Mock()
             # Simulate missing attribute
-            mock_dbx.configure_mock(**{'_oauth2_access_token': None})
+            mock_dbx.configure_mock(**{"_oauth2_access_token": None})
             mock_dropbox_class.return_value = mock_dbx
 
             manager = OAuthManager(app_key="test_key")
@@ -120,7 +120,7 @@ class TestOAuthManager:
 
     def test_refresh_access_token_failure(self):
         """Test access token refresh failure."""
-        with patch('dropbox.Dropbox') as mock_dropbox_class:
+        with patch("dropbox.Dropbox") as mock_dropbox_class:
             mock_dropbox_class.side_effect = Exception("API error")
 
             manager = OAuthManager(app_key="test_key")
@@ -162,7 +162,7 @@ class TestTokenStorage:
         mock_keyring_module = Mock()
 
         # Patch the import within the __init__ method
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage(service_name="test-service")
             assert storage.service_name == "test-service"
             assert storage.keyring_available is True
@@ -172,14 +172,15 @@ class TestTokenStorage:
         """Test TokenStorage initialization without keyring."""
         # Simulate keyring import failure
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == 'keyring':
+            if name == "keyring":
                 raise ImportError("No module named 'keyring'")
             return original_import(name, *args, **kwargs)
 
-        with patch('builtins.__import__', side_effect=mock_import):
+        with patch("builtins.__import__", side_effect=mock_import):
             storage = TokenStorage(service_name="test-service")
             assert storage.keyring_available is False
             assert storage.keyring is None
@@ -188,13 +189,9 @@ class TestTokenStorage:
         """Test successful token saving to keyring."""
         mock_keyring_module = Mock()
 
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage()
-            tokens = {
-                "access_token": "test_access",
-                "refresh_token": "test_refresh",
-                "expires_at": "123456"
-            }
+            tokens = {"access_token": "test_access", "refresh_token": "test_refresh", "expires_at": "123456"}
 
             result = storage.save_tokens(tokens, username="testuser")
 
@@ -209,14 +206,15 @@ class TestTokenStorage:
         """Test token saving when keyring is not available."""
         # Force ImportError
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == 'keyring':
+            if name == "keyring":
                 raise ImportError("No module named 'keyring'")
             return original_import(name, *args, **kwargs)
 
-        with patch('builtins.__import__', side_effect=mock_import):
+        with patch("builtins.__import__", side_effect=mock_import):
             storage = TokenStorage()
             assert storage.keyring_available is False
 
@@ -230,7 +228,7 @@ class TestTokenStorage:
         mock_keyring_module = Mock()
         mock_keyring_module.set_password.side_effect = Exception("Keyring error")
 
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage()
             tokens = {"access_token": "test"}
             result = storage.save_tokens(tokens)
@@ -239,29 +237,23 @@ class TestTokenStorage:
 
     def test_load_tokens_success(self):
         """Test successful token loading from keyring."""
-        tokens = {
-            "access_token": "test_access",
-            "refresh_token": "test_refresh",
-            "expires_at": "123456"
-        }
+        tokens = {"access_token": "test_access", "refresh_token": "test_refresh", "expires_at": "123456"}
         mock_keyring_module = Mock()
         mock_keyring_module.get_password.return_value = json.dumps(tokens)
 
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage()
             loaded_tokens = storage.load_tokens(username="testuser")
 
             assert loaded_tokens == tokens
-            mock_keyring_module.get_password.assert_called_once_with(
-                "dropbox-photo-organizer", "testuser"
-            )
+            mock_keyring_module.get_password.assert_called_once_with("dropbox-photo-organizer", "testuser")
 
     def test_load_tokens_not_found(self):
         """Test loading tokens when none exist."""
         mock_keyring_module = Mock()
         mock_keyring_module.get_password.return_value = None
 
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage()
             loaded_tokens = storage.load_tokens()
 
@@ -270,14 +262,15 @@ class TestTokenStorage:
     def test_load_tokens_without_keyring(self):
         """Test loading tokens when keyring is not available."""
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == 'keyring':
+            if name == "keyring":
                 raise ImportError("No module named 'keyring'")
             return original_import(name, *args, **kwargs)
 
-        with patch('builtins.__import__', side_effect=mock_import):
+        with patch("builtins.__import__", side_effect=mock_import):
             storage = TokenStorage()
             loaded_tokens = storage.load_tokens()
 
@@ -287,26 +280,25 @@ class TestTokenStorage:
         """Test successful token deletion."""
         mock_keyring_module = Mock()
 
-        with patch.dict('sys.modules', {'keyring': mock_keyring_module}):
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
             storage = TokenStorage()
             result = storage.delete_tokens(username="testuser")
 
             assert result is True
-            mock_keyring_module.delete_password.assert_called_once_with(
-                "dropbox-photo-organizer", "testuser"
-            )
+            mock_keyring_module.delete_password.assert_called_once_with("dropbox-photo-organizer", "testuser")
 
     def test_delete_tokens_without_keyring(self):
         """Test token deletion when keyring is not available."""
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == 'keyring':
+            if name == "keyring":
                 raise ImportError("No module named 'keyring'")
             return original_import(name, *args, **kwargs)
 
-        with patch('builtins.__import__', side_effect=mock_import):
+        with patch("builtins.__import__", side_effect=mock_import):
             storage = TokenStorage()
             result = storage.delete_tokens()
 
@@ -323,8 +315,8 @@ class TestDropboxClientFactory:
         assert factory.config == config
         assert factory.logger is not None
 
-    @patch('scripts.auth.client_factory.DropboxClient')
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.DropboxClient")
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_create_client_with_oauth_keyring(self, mock_storage_class, mock_client_class):
         """Test creating client with OAuth using keyring storage."""
         mock_storage = Mock()
@@ -332,20 +324,14 @@ class TestDropboxClientFactory:
         mock_storage.load_tokens.return_value = {
             "refresh_token": "test_refresh_token",
             "access_token": "test_access_token",
-            "expires_at": "123456"
+            "expires_at": "123456",
         }
         mock_storage_class.return_value = mock_storage
 
-        config = {
-            "dropbox": {
-                "app_key": "test_app_key",
-                "app_secret": "test_app_secret",
-                "token_storage": "keyring"
-            }
-        }
+        config = {"dropbox": {"app_key": "test_app_key", "app_secret": "test_app_secret", "token_storage": "keyring"}}
 
         factory = DropboxClientFactory(config)
-        client = factory.create_client()
+        factory.create_client()
 
         mock_client_class.assert_called_once()
         call_kwargs = mock_client_class.call_args[1]
@@ -354,42 +340,32 @@ class TestDropboxClientFactory:
         assert call_kwargs["app_secret"] == "test_app_secret"
         assert call_kwargs["token_refresh_callback"] is not None
 
-    @patch('scripts.auth.client_factory.DropboxClient')
+    @patch("scripts.auth.client_factory.DropboxClient")
     def test_create_client_with_oauth_config_storage(self, mock_client_class):
         """Test creating client with OAuth using config file storage."""
-        config = {
-            "dropbox": {
-                "app_key": "test_app_key",
-                "refresh_token": "test_refresh_token",
-                "token_storage": "config"
-            }
-        }
+        config = {"dropbox": {"app_key": "test_app_key", "refresh_token": "test_refresh_token", "token_storage": "config"}}
 
         factory = DropboxClientFactory(config)
-        client = factory.create_client()
+        factory.create_client()
 
         mock_client_class.assert_called_once()
         call_kwargs = mock_client_class.call_args[1]
         assert call_kwargs["refresh_token"] == "test_refresh_token"
         assert call_kwargs["app_key"] == "test_app_key"
 
-    @patch('scripts.auth.client_factory.DropboxClient')
+    @patch("scripts.auth.client_factory.DropboxClient")
     def test_create_client_with_legacy_token(self, mock_client_class):
         """Test creating client with legacy access token."""
-        config = {
-            "dropbox": {
-                "access_token": "legacy_access_token"
-            }
-        }
+        config = {"dropbox": {"access_token": "legacy_access_token"}}
 
         factory = DropboxClientFactory(config)
-        client = factory.create_client()
+        factory.create_client()
 
         mock_client_class.assert_called_once()
         call_kwargs = mock_client_class.call_args[1]
         assert call_kwargs["access_token"] == "legacy_access_token"
 
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_create_client_no_credentials(self, mock_storage_class):
         """Test creating client with no credentials."""
         mock_storage = Mock()
@@ -402,7 +378,7 @@ class TestDropboxClientFactory:
         with pytest.raises(ValueError, match="No valid Dropbox credentials found"):
             factory.create_client()
 
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_create_client_oauth_no_refresh_token(self, mock_storage_class):
         """Test creating client with OAuth configured but no refresh token."""
         mock_storage = Mock()
@@ -410,11 +386,7 @@ class TestDropboxClientFactory:
         mock_storage.load_tokens.return_value = None
         mock_storage_class.return_value = mock_storage
 
-        config = {
-            "dropbox": {
-                "app_key": "test_app_key"
-            }
-        }
+        config = {"dropbox": {"app_key": "test_app_key"}}
 
         factory = DropboxClientFactory(config)
         with pytest.raises(ValueError, match="No valid Dropbox credentials found"):
@@ -422,26 +394,19 @@ class TestDropboxClientFactory:
 
     def test_get_refresh_token_from_config(self):
         """Test getting refresh token from config file."""
-        config = {
-            "dropbox": {
-                "refresh_token": "config_refresh_token",
-                "token_storage": "config"
-            }
-        }
+        config = {"dropbox": {"refresh_token": "config_refresh_token", "token_storage": "config"}}
 
         factory = DropboxClientFactory(config)
         token = factory._get_refresh_token(config["dropbox"], "config")
 
         assert token == "config_refresh_token"
 
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_get_refresh_token_from_keyring(self, mock_storage_class):
         """Test getting refresh token from keyring."""
         mock_storage = Mock()
         mock_storage.keyring_available = True
-        mock_storage.load_tokens.return_value = {
-            "refresh_token": "keyring_refresh_token"
-        }
+        mock_storage.load_tokens.return_value = {"refresh_token": "keyring_refresh_token"}
         mock_storage_class.return_value = mock_storage
 
         config = {"dropbox": {}}
@@ -451,7 +416,7 @@ class TestDropboxClientFactory:
 
         assert token == "keyring_refresh_token"
 
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_get_refresh_token_keyring_fallback_to_config(self, mock_storage_class):
         """Test fallback to config when keyring fails."""
         mock_storage = Mock()
@@ -459,19 +424,15 @@ class TestDropboxClientFactory:
         mock_storage.load_tokens.return_value = None
         mock_storage_class.return_value = mock_storage
 
-        config = {
-            "dropbox": {
-                "refresh_token": "config_fallback_token"
-            }
-        }
+        config = {"dropbox": {"refresh_token": "config_fallback_token"}}
 
         factory = DropboxClientFactory(config)
         token = factory._get_refresh_token(config["dropbox"], "keyring")
 
         assert token == "config_fallback_token"
 
-    @patch('scripts.auth.client_factory.DropboxClient')
-    @patch('scripts.auth.client_factory.TokenStorage')
+    @patch("scripts.auth.client_factory.DropboxClient")
+    @patch("scripts.auth.client_factory.TokenStorage")
     def test_create_client_with_invalid_refresh_token_empty(self, mock_storage_class, mock_client_class):
         """Test creating client with empty refresh token."""
         mock_storage = Mock()
@@ -479,31 +440,20 @@ class TestDropboxClientFactory:
         mock_storage.load_tokens.return_value = {
             "refresh_token": "   ",  # Whitespace only
             "access_token": "test_access_token",
-            "expires_at": "123456"
+            "expires_at": "123456",
         }
         mock_storage_class.return_value = mock_storage
 
-        config = {
-            "dropbox": {
-                "app_key": "test_app_key",
-                "token_storage": "keyring"
-            }
-        }
+        config = {"dropbox": {"app_key": "test_app_key", "token_storage": "keyring"}}
 
         factory = DropboxClientFactory(config)
         with pytest.raises(ValueError, match="Invalid refresh token format"):
             factory.create_client()
 
-    @patch('scripts.auth.client_factory.DropboxClient')
+    @patch("scripts.auth.client_factory.DropboxClient")
     def test_create_client_with_invalid_refresh_token_not_string(self, mock_client_class):
         """Test creating client with non-string refresh token."""
-        config = {
-            "dropbox": {
-                "app_key": "test_app_key",
-                "refresh_token": 12345,  # Not a string
-                "token_storage": "config"
-            }
-        }
+        config = {"dropbox": {"app_key": "test_app_key", "refresh_token": 12345, "token_storage": "config"}}  # Not a string
 
         factory = DropboxClientFactory(config)
         with pytest.raises(ValueError, match="Invalid refresh token format"):

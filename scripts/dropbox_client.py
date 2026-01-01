@@ -6,11 +6,11 @@ Supports both legacy access tokens and OAuth 2.0 with automatic token refresh.
 
 import logging
 import os
-from typing import Dict, Generator, List, Optional
+from typing import Generator, List, Optional
 
 import dropbox
 from dropbox.exceptions import ApiError, AuthError
-from dropbox.files import FileMetadata, FolderMetadata, WriteMode
+from dropbox.files import FileMetadata
 
 from scripts.auth.constants import DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS
 
@@ -102,8 +102,7 @@ class DropboxClient:
                 return getattr(self.dbx, "_oauth2_access_token", None)
             except AttributeError:
                 self.logger.warning(
-                    "Unable to access SDK access token. "
-                    "This may indicate a Dropbox SDK version incompatibility."
+                    "Unable to access SDK access token. " "This may indicate a Dropbox SDK version incompatibility."
                 )
                 return None
         else:
