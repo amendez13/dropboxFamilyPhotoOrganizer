@@ -612,6 +612,174 @@ pytest -v
 pytest --cov=scripts
 ```
 
+## Automated Dependency Updates with Dependabot
+
+Dependabot is configured to automatically create pull requests for dependency updates, keeping the project secure and up-to-date.
+
+### Configuration
+
+Location: `.github/dependabot.yml`
+
+**Update Schedule:**
+- **Python dependencies**: Weekly on Monday mornings (9 AM ET)
+- **GitHub Actions**: Monthly
+
+**PR Limits:**
+- Maximum 5 Python dependency PRs
+- Maximum 3 GitHub Actions PRs
+
+**Grouping Strategy:**
+- Development dependencies (minor/patch) are grouped together
+- Production dependencies (minor/patch) are grouped together
+- Major version updates create individual PRs
+
+### Reviewing Dependabot Pull Requests
+
+When Dependabot creates a PR, follow this workflow:
+
+**1. Check the CI Status**
+- All CI checks must pass before merging
+- Review test results for any new failures
+- Check security scan results
+
+**2. Review the Changes**
+- Look at the version diff (e.g., `1.2.3` → `1.2.4`)
+- Check if it's a patch, minor, or major update
+- For major updates, review the changelog/release notes
+
+**3. Understand the Update Type**
+
+**Patch Updates (1.2.3 → 1.2.4)**
+- Typically bug fixes only
+- Safe to merge if CI passes
+- Low risk of breaking changes
+
+**Minor Updates (1.2.0 → 1.3.0)**
+- New features, may include bug fixes
+- Should be backward compatible
+- Review release notes for new features
+- Merge if CI passes and no concerning changes
+
+**Major Updates (1.x.x → 2.0.0)**
+- May contain breaking changes
+- **Always review the migration guide**
+- Check if code changes are needed
+- Test locally if significant changes
+- May need to update code before merging
+
+**4. Security Updates**
+- PRs labeled with `security` should be prioritized
+- Review the CVE details if provided
+- Merge promptly after CI validation
+
+**5. Grouped Updates**
+- Review all packages in the group
+- If one package causes issues, ungroup and update individually
+- Comment on the PR to exclude problematic packages
+
+**6. Testing Locally (Optional)**
+
+For major updates or concerning changes:
+```bash
+# Check out the Dependabot branch
+gh pr checkout <PR_NUMBER>
+
+# Install updated dependencies
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+
+# Run tests locally
+pytest tests/ -v
+
+# Test the application
+python scripts/test_dropbox_connection.py
+```
+
+**7. Merging**
+- For safe updates (patches, minor): Merge via GitHub UI
+- For major updates: Consider creating a feature branch for testing
+- Use "Squash and merge" to keep history clean
+
+### Managing Dependabot PRs
+
+**Enable Auto-merge for Safe Updates:**
+```bash
+# For patch updates that pass CI
+gh pr review <PR_NUMBER> --approve
+gh pr merge <PR_NUMBER> --auto --squash
+```
+
+**Close Unwanted Updates:**
+```bash
+# If you want to skip a specific update
+gh pr close <PR_NUMBER>
+# Comment: "@dependabot ignore this major version"
+```
+
+**Rebase Outdated PRs:**
+```bash
+# Comment on the PR to trigger rebase
+# Comment: "@dependabot rebase"
+```
+
+### Dependabot Commands
+
+Comment on Dependabot PRs with these commands:
+
+- `@dependabot rebase` - Rebase the PR
+- `@dependabot recreate` - Recreate the PR from scratch
+- `@dependabot merge` - Merge the PR after CI passes
+- `@dependabot cancel merge` - Cancel auto-merge
+- `@dependabot close` - Close the PR
+- `@dependabot ignore this dependency` - Stop updates for this package
+- `@dependabot ignore this major version` - Skip this major version
+- `@dependabot ignore this minor version` - Skip this minor version
+- `@dependabot reopen` - Reopen a closed PR
+
+### Best Practices
+
+**1. Regular Review Cadence**
+- Review Dependabot PRs weekly (matches the schedule)
+- Don't let PRs accumulate - stale PRs are harder to merge
+- Prioritize security updates
+
+**2. Test Critical Updates**
+- Major version updates warrant local testing
+- Updates to core dependencies (dropbox, face_recognition) need extra scrutiny
+- Security updates should be tested but merged quickly
+
+**3. Monitor for Issues**
+- Watch for CI failures after merging updates
+- Check error tracking for new issues
+- Be prepared to revert if problems arise
+
+**4. Update Strategy**
+- Merge small updates frequently rather than batching
+- Keep dependencies current to avoid large version jumps
+- Don't ignore updates for too long
+
+### Troubleshooting
+
+**Dependabot PRs not appearing:**
+- Check `.github/dependabot.yml` syntax
+- Verify the schedule configuration
+- Check repository settings for Dependabot enablement
+
+**Merge conflicts:**
+- Comment `@dependabot rebase` to resolve
+- May need to merge main into the PR manually
+
+**CI failures on Dependabot PRs:**
+- Check if the update introduced breaking changes
+- Review test failures and error messages
+- May need to update code to accommodate changes
+- Consider closing the PR and addressing separately
+
+**Too many PRs:**
+- Adjust `open-pull-requests-limit` in config
+- Expand grouping rules to consolidate more updates
+- Review and merge more frequently
+
 ## Future Enhancements
 
 ### Planned Additions
@@ -632,14 +800,6 @@ pytest --cov=scripts
    - Version tagging
    - Changelog generation
    - Release notes automation
-
-5. **Dependency Updates**
-   - Dependabot configuration
-   - Automated security updates
-
-6. **Pre-commit Hooks**
-   - Local validation before commits
-   - Auto-formatting on commit
 
 ### Optional Integrations
 

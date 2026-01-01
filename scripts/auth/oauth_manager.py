@@ -10,10 +10,7 @@ from typing import Dict, Optional
 
 from dropbox import DropboxOAuth2FlowNoRedirect
 
-from scripts.auth.constants import (
-    DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS,
-    TOKEN_EXPIRY_BUFFER_SECONDS,
-)
+from scripts.auth.constants import DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS, TOKEN_EXPIRY_BUFFER_SECONDS
 
 
 class OAuthManager:
