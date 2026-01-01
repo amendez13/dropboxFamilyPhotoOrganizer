@@ -47,9 +47,12 @@ def load_config(config_path: str = '../config/config.yaml') -> dict:
     Returns:
         Configuration dictionary
     """
-    # Resolve path relative to this script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    full_path = os.path.join(script_dir, config_path)
+    # Resolve path relative to this script or use absolute path
+    if os.path.isabs(config_path):
+        full_path = config_path
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.abspath(os.path.join(script_dir, config_path))
 
     with open(full_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -97,11 +100,15 @@ def safe_organize(
 
     except Exception as e:
         log_entry['error'] = str(e)
-        logging.error(f"Error during {operation} operation: {e}")
+        dbx.logger.error(f"Error during {operation} operation: {e}")
 
     # Log operation to file if specified
     if log_file:
         try:
+            # Ensure log directory exists
+            log_dir = os.path.dirname(os.path.abspath(log_file))
+            if log_dir:  # Only create if there's a directory component
+                os.makedirs(log_dir, exist_ok=True)
             with open(log_file, 'a') as f:
                 f.write(json.dumps(log_entry) + '\n')
         except Exception as e:
