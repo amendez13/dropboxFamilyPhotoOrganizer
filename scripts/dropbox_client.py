@@ -70,9 +70,7 @@ class DropboxClient:
         else:
             # Legacy mode with direct access token
             self.logger.info("Initializing Dropbox client with legacy access token")
-            self.logger.warning(
-                "Using legacy access token. Consider migrating to OAuth 2.0 with refresh tokens."
-            )
+            self.logger.warning("Using legacy access token. Consider migrating to OAuth 2.0 with refresh tokens.")
             self.dbx = dropbox.Dropbox(access_token)
             self.auth_mode = "legacy"
             self.access_token = access_token
