@@ -6,9 +6,14 @@ Handles authorization flow with PKCE and refresh token management.
 import json
 import logging
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from dropbox import DropboxOAuth2FlowNoRedirect
+
+from scripts.auth.constants import (
+    DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS,
+    TOKEN_EXPIRY_BUFFER_SECONDS,
+)
 
 
 class OAuthManager:
@@ -75,12 +80,12 @@ class OAuthManager:
             oauth_result = self._auth_flow.finish(auth_code)
 
             # Extract token information
-            # Note: Dropbox access tokens typically expire after 4 hours (14400 seconds)
+            # Note: Dropbox access tokens typically expire after 4 hours
             # The OAuth result doesn't include expires_in, so we use the default
             tokens = {
                 "access_token": oauth_result.access_token,
                 "refresh_token": oauth_result.refresh_token,
-                "expires_at": str(int(time.time()) + 14400),  # 4 hours default
+                "expires_at": str(int(time.time()) + DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS),
                 "account_id": oauth_result.account_id,
             }
 
@@ -122,11 +127,28 @@ class OAuthManager:
             dbx.users_get_current_account()
 
             # Get the refreshed access token
-            # Note: The SDK handles refresh internally, but we need to expose the new token
-            access_token = dbx._oauth2_access_token
+            # IMPORTANT: We access the private SDK attribute '_oauth2_access_token' here.
+            # This is necessary because the Dropbox SDK doesn't provide a public API
+            # to retrieve the current access token after automatic refresh.
+            #
+            # Risk: This could break if Dropbox SDK changes this private attribute name
+            # or implementation in future versions. We mitigate this with:
+            # 1. Defensive getattr() with None fallback
+            # 2. Runtime check and clear error message if attribute is missing
+            # 3. Try-except wrapper in get_current_access_token() method
+            #
+            # If this breaks in a future SDK version, the application will still function
+            # (automatic refresh will continue to work), but we won't be able to expose
+            # the refreshed token to callbacks or save it manually.
+            access_token = getattr(dbx, "_oauth2_access_token", None)
+
+            if not access_token:
+                raise RuntimeError(
+                    "Unable to retrieve access token from Dropbox SDK. " "This may indicate an SDK version incompatibility."
+                )
 
             # Calculate new expiry (Dropbox access tokens typically last 4 hours)
-            expires_at = str(int(time.time()) + 14400)  # 4 hours = 14400 seconds
+            expires_at = str(int(time.time()) + DROPBOX_ACCESS_TOKEN_EXPIRY_SECONDS)
 
             self.logger.info("Access token refreshed successfully")
 
@@ -153,9 +175,8 @@ class OAuthManager:
             expiry_time = int(expires_at)
             current_time = int(time.time())
 
-            # Consider token expired if it expires within 5 minutes
-            buffer_seconds = 300  # 5 minutes
-            return (expiry_time - current_time) <= buffer_seconds
+            # Consider token expired if it expires within the configured buffer time
+            return (expiry_time - current_time) <= TOKEN_EXPIRY_BUFFER_SECONDS
 
         except (ValueError, TypeError):
             self.logger.warning(f"Invalid expires_at value: {expires_at}")

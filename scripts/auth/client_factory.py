@@ -45,6 +45,11 @@ class DropboxClientFactory:
             refresh_token = self._get_refresh_token(dropbox_config, token_storage_mode)
 
             if refresh_token:
+                # Validate refresh token before use
+                if not isinstance(refresh_token, str) or not refresh_token.strip():
+                    self.logger.error("Invalid refresh token: must be a non-empty string")
+                    raise ValueError("Invalid refresh token format")
+
                 # Create token refresh callback
                 def token_refresh_callback(access_token: str, expires_at: str):
                     """Callback to save refreshed tokens."""
