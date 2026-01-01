@@ -6,9 +6,11 @@ Automatically scan your Dropbox photos, detect a specific person using face reco
 
 - 🔍 Recursively scan Dropbox folders for photos
 - 👤 Detect specific person using face recognition
-- 📁 Automatically move matching photos to destination folder
+- 📁 Automatically copy or move matching photos to destination folder
+- 🔒 Safe by default: copies files instead of moving (preserves originals)
+- 📝 Audit logging: tracks all file operations with timestamps
 - 🚀 Efficient processing using thumbnails
-- 🛡️ Dry-run mode to preview changes before moving files
+- 🛡️ Dry-run mode to preview changes before copying/moving files
 - 📊 Batch processing with progress tracking
 
 ## Quick Start
@@ -82,6 +84,8 @@ face_recognition:
   thumbnail_size: "w256h256"
 
 processing:
+  operation: "copy"  # 'copy' (default) or 'move'
+  log_operations: true  # Enable audit logging
   dry_run: true
   batch_size: 50
   image_extensions: [.jpg, .jpeg, .png, .heic]
@@ -91,10 +95,12 @@ processing:
 
 - **access_token**: Your Dropbox API token (from App Console)
 - **source_folder**: Folder to scan for photos
-- **destination_folder**: Where matching photos will be moved
+- **destination_folder**: Where matching photos will be copied/moved
 - **reference_photos_dir**: Local folder with reference photos of the target person
 - **tolerance**: Face matching sensitivity (0.4-0.6 typical, lower = stricter)
-- **dry_run**: If true, lists matches without moving files
+- **operation**: Operation mode - `copy` (default, safer) or `move` (destructive)
+- **log_operations**: If true, logs all operations to `operations.log`
+- **dry_run**: If true, lists matches without copying/moving files
 
 ## Project Structure
 
@@ -110,6 +116,7 @@ dropboxFamilyPhotoOrganizer/
 │   ├── installation/
 │   │   └── install_macos.sh    # macOS installation automation script
 │   ├── dropbox_client.py   # Dropbox API client
+│   ├── organize_photos.py  # Main photo organizer script
 │   ├── test_dropbox_connection.py  # Connection test script
 │   ├── check_account.py    # Account verification utility
 │   └── list_folders.py     # Folder listing utility
@@ -129,12 +136,39 @@ python scripts/test_dropbox_connection.py
 ### Run Photo Organizer (Coming Soon)
 
 ```bash
-# Dry run (preview matches without moving)
+# Dry run (preview matches without copying/moving)
 python scripts/organize_photos.py
 
-# Actually move files (set dry_run: false in config/config.yaml)
+# Copy files (default, preserves originals)
 python scripts/organize_photos.py
+
+# Move files instead of copying (use --move flag)
+python scripts/organize_photos.py --move
+
+# Custom log file location
+python scripts/organize_photos.py --log-file /path/to/custom.log
+
+# Verbose output
+python scripts/organize_photos.py --verbose
 ```
+
+### Operation Modes
+
+**Copy (Default - Recommended)**
+- Preserves original files in source location
+- Safer option - no data loss if there are bugs
+- Easy to revert - just delete destination files
+- Maintains shared links and references
+- Uses more Dropbox storage
+
+**Move (Use with caution)**
+- Removes files from source after copying
+- Frees up storage in source folder
+- Cannot be easily reversed
+- May break shared links
+- Enable with `--move` flag or set `operation: "move"` in config
+
+All operations are logged to `operations.log` (unless disabled) for audit trail.
 
 ## Security Notes
 
@@ -171,7 +205,9 @@ See [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.md) for more troubleshooting tips
 - Dropbox authentication
 - Folder listing and file traversal
 - File download and thumbnail retrieval
-- File moving capabilities
+- File copy and move capabilities
+- Audit logging for operations
+- CLI with copy/move modes
 
 🔲 **Phase 2 (Next)**: Face recognition integration
 - Load reference photos
