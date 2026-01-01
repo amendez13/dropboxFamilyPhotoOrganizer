@@ -34,6 +34,11 @@ face_recognition:
     model: "hog"  # 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
     num_jitters: 1  # Higher = more accurate but slower
 
+    # Face encoding cache (optional, recommended for faster startup)
+    # Set to a file path to enable caching, or comment out to disable
+    # Cache automatically invalidates when reference photos change
+    cache_file: "./cache/face_encodings.pkl"  # Optional: path to cache file
+
   # AWS Rekognition settings (only needed if provider is 'aws')
   aws:
     # AWS credentials (optional if using AWS CLI configuration)

@@ -10,6 +10,7 @@ Automatically scan your Dropbox photos, detect a specific person using face reco
 - 🔒 Safe by default: copies files instead of moving (preserves originals)
 - 📝 Audit logging: tracks all file operations with timestamps
 - 🚀 Efficient processing using thumbnails
+- ⚡ Face encoding cache for faster startup (no need to reprocess reference photos)
 - 🛡️ Dry-run mode to preview changes before copying/moving files
 - 📊 Batch processing with progress tracking
 
@@ -82,6 +83,8 @@ face_recognition:
   reference_photos_dir: "./reference_photos"
   tolerance: 0.6
   thumbnail_size: "w256h256"
+  local:
+    cache_file: "./cache/face_encodings.pkl"  # Optional: enables caching
 
 processing:
   operation: "copy"  # 'copy' (default) or 'move'
@@ -98,6 +101,7 @@ processing:
 - **destination_folder**: Where matching photos will be copied/moved
 - **reference_photos_dir**: Local folder with reference photos of the target person
 - **tolerance**: Face matching sensitivity (0.4-0.6 typical, lower = stricter)
+- **cache_file**: Optional path to cache file for face encodings (speeds up subsequent runs)
 - **operation**: Operation mode - `copy` (default, safer) or `move` (destructive)
 - **log_operations**: If true, logs all operations to `operations.log`
 - **dry_run**: If true, lists matches without copying/moving files
@@ -169,6 +173,37 @@ python scripts/organize_photos.py --verbose
 - Enable with `--move` flag or set `operation: "move"` in config
 
 All operations are logged to `operations.log` (unless disabled) for audit trail.
+
+### Face Encoding Cache
+
+The face recognition system supports caching to improve performance:
+
+**How it works:**
+- First run: Generates face encodings from reference photos and saves to cache file
+- Subsequent runs: Loads encodings from cache (much faster than regenerating)
+- Auto-invalidation: Cache automatically regenerates if:
+  - Reference photos are added, removed, or modified
+  - Face recognition settings change (model, tolerance, etc.)
+  - Cache file is corrupted or incompatible
+
+**Configuration:**
+```yaml
+face_recognition:
+  local:
+    cache_file: "./cache/face_encodings.pkl"  # Enable caching
+    # cache_file: null  # Disable caching (always regenerate)
+```
+
+**Benefits:**
+- ⚡ Faster startup (skip face encoding generation)
+- 💾 Encodings computed once and reused
+- 🔄 Automatic cache invalidation ensures accuracy
+- 🎯 Transparent to users (works automatically)
+
+**Managing the cache:**
+- Cache is stored in `./cache/` directory (gitignored)
+- To force regeneration: delete the cache file or modify reference photos
+- Cache is provider-specific (local/AWS/Azure use separate caches)
 
 ## Security Notes
 

@@ -25,6 +25,8 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
 
 2. **Face Recognition Pipeline**:
    - Pre-compute face encodings from reference photos of target person
+   - Cache encodings to file for faster subsequent runs (optional but recommended)
+   - Automatic cache invalidation when reference photos or config changes
    - Process thumbnails (256x256) to reduce bandwidth and processing time
    - Compare face encodings with tolerance ~0.6
    - Filter for supported image formats: .jpg, .jpeg, .png, .heic

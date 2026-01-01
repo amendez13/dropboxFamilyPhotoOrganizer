@@ -43,3 +43,7 @@ ENV/
 # Temporary files
 temp/
 tmp/
+
+# Face encoding cache
+cache/
+*.pkl
