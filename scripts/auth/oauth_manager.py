@@ -70,9 +70,7 @@ class OAuthManager:
         """
         try:
             if not hasattr(self, "_auth_flow"):
-                raise ValueError(
-                    "Authorization flow not started. Call start_authorization_flow() first."
-                )
+                raise ValueError("Authorization flow not started. Call start_authorization_flow() first.")
 
             oauth_result = self._auth_flow.finish(auth_code)
 
@@ -213,8 +211,7 @@ class TokenStorage:
             else:
                 # Fallback: Warn user about insecure storage
                 self.logger.warning(
-                    "Tokens cannot be saved securely without keyring. "
-                    "Please manually add tokens to config file."
+                    "Tokens cannot be saved securely without keyring. " "Please manually add tokens to config file."
                 )
                 return False
 

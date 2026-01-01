@@ -65,9 +65,7 @@ class DropboxClientFactory:
         access_token = dropbox_config.get("access_token")
         if access_token:
             self.logger.warning("Using legacy access token authentication")
-            self.logger.warning(
-                "Consider migrating to OAuth 2.0 for automatic token refresh"
-            )
+            self.logger.warning("Consider migrating to OAuth 2.0 for automatic token refresh")
             return DropboxClient(access_token=access_token)
 
         # No valid credentials found
@@ -78,9 +76,7 @@ class DropboxClientFactory:
             "2. Add 'access_token' to config/config.yaml (legacy, not recommended)"
         )
 
-    def _get_refresh_token(
-        self, dropbox_config: dict, token_storage_mode: str
-    ) -> Optional[str]:
+    def _get_refresh_token(self, dropbox_config: dict, token_storage_mode: str) -> Optional[str]:
         """
         Get refresh token from configured storage.
 

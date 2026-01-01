@@ -93,18 +93,14 @@ def save_tokens_to_config(config_path: Path, tokens: dict):
 
 def main():
     """Main authorization flow."""
-    parser = argparse.ArgumentParser(
-        description="Authorize Dropbox Photo Organizer with OAuth 2.0"
-    )
+    parser = argparse.ArgumentParser(description="Authorize Dropbox Photo Organizer with OAuth 2.0")
     parser.add_argument(
         "--config",
         type=Path,
         default=project_root / "config" / "config.yaml",
         help="Path to configuration file (default: config/config.yaml)",
     )
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable verbose logging"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument(
         "--force-config-storage",
         action="store_true",
@@ -130,7 +126,7 @@ def main():
     if not app_key:
         print("\nError: app_key not found in configuration file.")
         print("\nPlease add your Dropbox app key to config/config.yaml:")
-        print("\ndropbox:\n  app_key: \"YOUR_APP_KEY_HERE\"")
+        print('\ndropbox:\n  app_key: "YOUR_APP_KEY_HERE"')
         print("\nSee docs/DROPBOX_SETUP.md for instructions on creating a Dropbox app.")
         sys.exit(1)
 
