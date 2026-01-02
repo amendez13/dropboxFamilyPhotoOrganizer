@@ -253,7 +253,7 @@ class DropboxClient:
             self.logger.error(f"Error downloading file '{dropbox_path}': {e}")
             return False
 
-    def get_thumbnail(self, dropbox_path: str, size: str = "w256h256", format: str = "jpeg") -> Optional[bytes]:
+    def get_thumbnail(self, dropbox_path: str, size: str = "w2048h1536", format: str = "jpeg") -> Optional[bytes]:
         """
         Get a thumbnail of an image file.
 
@@ -297,6 +297,24 @@ class DropboxClient:
 
         except ApiError as e:
             self.logger.warning(f"Could not get thumbnail for '{dropbox_path}': {e}")
+            return None
+
+    def get_file_content(self, dropbox_path: str) -> Optional[bytes]:
+        """
+        Download the full content of a file from Dropbox.
+
+        Args:
+            dropbox_path: Path to file in Dropbox
+
+        Returns:
+            File content as bytes, or None if failed
+        """
+        try:
+            metadata, response = self.dbx.files_download(dropbox_path)
+            return response.content
+
+        except ApiError as e:
+            self.logger.warning(f"Could not download file '{dropbox_path}': {e}")
             return None
 
     def copy_file(self, source_path: str, dest_path: str, autorename: bool = True, allow_shared_folder: bool = False) -> bool:

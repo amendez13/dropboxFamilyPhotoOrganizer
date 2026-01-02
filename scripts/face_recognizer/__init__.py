@@ -6,17 +6,17 @@ Provides a factory pattern to easily instantiate different face recognition prov
 import logging
 from typing import Dict, Optional
 
-from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider
-from scripts.face_recognition.providers.local_provider import LocalFaceRecognitionProvider
+from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider
+from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
 # Optional providers (will be None if dependencies not installed)
 try:
-    from scripts.face_recognition.providers.aws_provider import AWSFaceRecognitionProvider
+    from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
 except ImportError:
     AWSFaceRecognitionProvider = None
 
 try:
-    from scripts.face_recognition.providers.azure_provider import AzureFaceRecognitionProvider
+    from scripts.face_recognizer.providers.azure_provider import AzureFaceRecognitionProvider
 except ImportError:
     AzureFaceRecognitionProvider = None
 

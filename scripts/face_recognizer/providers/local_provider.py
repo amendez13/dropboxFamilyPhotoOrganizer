@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch  # noqa: E402
+from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch  # noqa: E402
 
 
 class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -50,6 +50,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             config: Configuration dictionary with optional keys:
                 - model: 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
                 - num_jitters: Number of times to re-sample face for encoding (default: 1)
+                - encoding_model: 'small' (5 landmarks) or 'large' (68 landmarks, more accurate)
                 - tolerance: Default matching tolerance (default: 0.6)
         """
         super().__init__(config)
@@ -60,6 +61,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
         self.model = config.get("model", "hog")  # 'hog' or 'cnn'
         self.num_jitters = config.get("num_jitters", 1)
+        self.encoding_model = config.get("encoding_model", "small")  # 'small' or 'large'
         self.default_tolerance = config.get("tolerance", 0.6)
 
     def get_provider_name(self) -> str:
@@ -107,9 +109,9 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 if len(face_locations) > 1:
                     self.logger.warning(f"Multiple faces found in {photo_path}. " f"Using the first face only.")
 
-                # Encode faces
+                # Encode faces with specified model and jitters
                 encodings = face_recognition.face_encodings(
-                    image, known_face_locations=face_locations, num_jitters=self.num_jitters
+                    image, known_face_locations=face_locations, num_jitters=self.num_jitters, model=self.encoding_model
                 )
 
                 if encodings:
@@ -156,9 +158,9 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
             if not face_locations:
                 return []
 
-            # Encode faces
+            # Encode faces with specified model and jitters
             encodings = face_recognition.face_encodings(
-                image_array, known_face_locations=face_locations, num_jitters=self.num_jitters
+                image_array, known_face_locations=face_locations, num_jitters=self.num_jitters, model=self.encoding_model
             )
 
             # Create FaceEncoding objects

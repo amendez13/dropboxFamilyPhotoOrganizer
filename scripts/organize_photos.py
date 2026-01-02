@@ -14,9 +14,9 @@ from typing import Optional
 import yaml
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dropbox_client import DropboxClient  # noqa: E402
+from scripts.face_recognizer import get_provider  # noqa: E402
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -59,9 +59,7 @@ def load_config(config_path: str = "../config/config.yaml") -> dict:
     return config
 
 
-def safe_organize(
-    dbx: DropboxClient, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None
-) -> dict:
+def safe_organize(dbx, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None) -> dict:
     """
     Safely organize a file by copying or moving it, with audit logging.
 
@@ -112,6 +110,110 @@ def safe_organize(
     return log_entry
 
 
+def process_images(image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger):
+    """Process images and find matches."""
+    matches = []
+    processed = 0
+    errors = 0
+
+    logger.info("=" * 70)
+    logger.info("Processing images...")
+    logger.info("=" * 70)
+
+    for file_metadata in image_files:
+        file_path = file_metadata.path_display
+        processed += 1
+
+        if verbose_processing or processed % 10 == 0:
+            logger.info(f"Processing {processed}/{len(image_files)}: {file_path}")
+
+        try:
+            # Download image data (full-size or thumbnail based on config)
+            if use_full_size:
+                image_data = dbx_client.get_file_content(file_path)
+                if not image_data:
+                    logger.warning(f"Could not download full-size photo: {file_path}")
+                    errors += 1
+                    continue
+            else:
+                # Get thumbnail size from config
+                thumbnail_size = face_config.get("thumbnail_size", "w256h256")
+                image_data = dbx_client.get_thumbnail(file_path, size=thumbnail_size)
+                if not image_data:
+                    logger.warning(f"Could not get thumbnail for {file_path}")
+                    errors += 1
+                    continue
+
+            # Detect faces and check for matches
+            face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
+
+            if face_matches:
+                match_info = {
+                    "file_path": file_path,
+                    "num_matches": len(face_matches),
+                    "total_faces": total_faces,
+                    "matches": face_matches,
+                }
+                matches.append(match_info)
+                logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
+
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+            errors += 1
+
+    return matches, processed, errors
+
+
+def perform_operations(matches, destination_folder, dbx_client, operation, log_file, dry_run, logger):
+    """Perform copy/move operations on matched files."""
+    if not matches:
+        logger.info("No matching images found")
+        return
+
+    logger.info(f"Found {len(matches)} image(s) with matching faces:")
+    for match in matches:
+        logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
+
+    if dry_run:
+        logger.info("")
+        logger.info("DRY RUN MODE - No files were copied/moved")
+        logger.info("Remove --dry-run flag or set dry_run: false in config to perform actual operations")
+        return
+
+    logger.info("")
+    logger.info(f"Performing {operation} operations...")
+
+    success_count = 0
+    skipped_count = 0
+    processed_destinations = set()
+
+    for match in matches:
+        source_path = match["file_path"]
+        # Generate destination path
+        filename = os.path.basename(source_path)
+        dest_path = f"{destination_folder}/{filename}"
+
+        # Skip if we've already processed this destination in this run
+        if dest_path in processed_destinations:
+            skipped_count += 1
+            logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
+            continue
+
+        processed_destinations.add(dest_path)
+        log_entry = safe_organize(dbx_client, source_path, dest_path, operation, log_file)
+
+        if log_entry["success"]:
+            success_count += 1
+            logger.info(f"✓ {operation.capitalize()}d: {source_path} → {dest_path}")
+        else:
+            logger.error(f"✗ Failed to {operation}: {source_path}")
+
+    logger.info("")
+    logger.info(f"Successfully {operation}d {success_count}/{len(matches)} file(s)")
+    if skipped_count > 0:
+        logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
+
+
 def main():
     """Main entry point for the photo organizer."""
     parser = argparse.ArgumentParser(description="Organize Dropbox photos based on face recognition")
@@ -135,12 +237,23 @@ def main():
         logger.info("Loading configuration...")
         config = load_config(args.config)
 
-        # Extract configuration values
-        access_token = config["dropbox"]["access_token"]
+        # Extract Dropbox configuration
+        dropbox_config = config.get("dropbox", {})
+        source_folder = dropbox_config.get("source_folder")
+        destination_folder = dropbox_config.get("destination_folder")
+
+        # Get face recognition configuration
+        face_config = config.get("face_recognition", {})
+        provider_name = face_config.get("provider", "local")
+        reference_photos_dir = face_config.get("reference_photos_dir", "./reference_photos")
+        tolerance = face_config.get("tolerance", 0.6)
 
         # Get processing configuration
         processing = config.get("processing", {})
         dry_run = args.dry_run or processing.get("dry_run", False)
+        image_extensions = processing.get("image_extensions", [".jpg", ".jpeg", ".png", ".heic"])
+        verbose_processing = processing.get("verbose", False)
+        use_full_size = processing.get("use_full_size_photos", False)
 
         # Determine operation mode (CLI flag takes precedence)
         if args.move:
@@ -155,26 +268,189 @@ def main():
 
         logger.info(f"Operation mode: {operation}")
         logger.info(f"Dry run: {dry_run}")
+        if use_full_size:
+            logger.info("Image processing: Full-size photos")
+        else:
+            thumbnail_size = face_config.get("thumbnail_size", "w256h256")
+            logger.info(f"Image processing: Thumbnails ({thumbnail_size})")
+        logger.info(f"Source folder: {source_folder}")
+        logger.info(f"Destination folder: {destination_folder}")
         logger.info(f"Log file: {log_file if log_file else 'disabled'}")
 
-        # Initialize Dropbox client
+        # Initialize Dropbox client using OAuth
         logger.info("Connecting to Dropbox...")
-        dbx = DropboxClient(access_token)
+        from scripts.auth.client_factory import DropboxClientFactory
 
-        if not dbx.verify_connection():
-            logger.error("Failed to connect to Dropbox. Please check your access token.")
+        factory = DropboxClientFactory(config)
+        dbx_client = factory.create_client()
+
+        logger.info("✓ Connected to Dropbox")
+
+        # Initialize face recognition provider
+        logger.info(f"Initializing {provider_name} face recognition provider...")
+        local_config = face_config.get(provider_name, {})
+
+        # Use recognition-specific num_jitters if available, otherwise fall back to default
+        recognition_config = local_config.get("recognition", {})
+        recognition_num_jitters = recognition_config.get("num_jitters", local_config.get("num_jitters", 1))
+
+        # Build config for provider with recognition parameters
+        provider_config = {
+            "model": local_config.get("model", "hog"),
+            "encoding_model": local_config.get("encoding_model", "large"),
+            "num_jitters": recognition_num_jitters,
+            "tolerance": tolerance,
+        }
+
+        logger.info(f"  Detection model: {provider_config['model']}")
+        logger.info(f"  Encoding model: {provider_config['encoding_model']}")
+        logger.info(f"  Num jitters (recognition): {provider_config['num_jitters']}")
+        logger.info(f"  Tolerance: {tolerance}")
+
+        provider = get_provider(provider_name, provider_config)
+
+        # Load reference photos
+        logger.info(f"Loading reference photos from {reference_photos_dir}...")
+        import glob
+
+        reference_photos = []
+        for ext in image_extensions:
+            pattern = f"{reference_photos_dir}/*{ext}"
+            reference_photos.extend(glob.glob(pattern))
+
+        # Remove duplicates and system files
+        reference_photos = list(set(reference_photos))
+        reference_photos = [p for p in reference_photos if not os.path.basename(p).startswith(".")]
+
+        if not reference_photos:
+            logger.error(f"No reference photos found in {reference_photos_dir}")
+            logger.error("Please add reference photos and run scripts/train_face_model.py first")
             return 1
 
-        # TODO: Implement face recognition pipeline
-        # This is a placeholder for the actual implementation
-        logger.warning("Face recognition pipeline not yet implemented")
-        logger.info("This script currently only supports the safe_organize function")
-        logger.info("Full implementation coming soon...")
+        num_faces = provider.load_reference_photos(reference_photos)
+        logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
 
-        # Example usage of safe_organize (for demonstration)
-        if not dry_run:
-            logger.info("\nExample: To use safe_organize function:")
-            logger.info(f"  safe_organize(dbx, '/source/file.jpg', '/dest/file.jpg', '{operation}', '{log_file}')")
+        # List files in source folder
+        logger.info(f"Scanning {source_folder} for photos...")
+        files = list(dbx_client.list_folder_recursive(source_folder))
+
+        # Filter for image files, excluding destination folder
+        image_files = [
+            f
+            for f in files
+            if any(f.path_lower.endswith(ext.lower()) for ext in image_extensions)
+            and not f.path_lower.startswith(destination_folder.lower())
+        ]
+
+        logger.info(f"Found {len(image_files)} image file(s) to process")
+
+        if len(image_files) == 0:
+            logger.warning("No image files found in source folder")
+            return 0
+
+        # Process images
+        matches = []
+        processed = 0
+        errors = 0
+
+        logger.info("=" * 70)
+        logger.info("Processing images...")
+        logger.info("=" * 70)
+
+        for file_metadata in image_files:
+            file_path = file_metadata.path_display
+            processed += 1
+
+            if verbose_processing or processed % 10 == 0:
+                logger.info(f"Processing {processed}/{len(image_files)}: {file_path}")
+
+            try:
+                # Download image data (full-size or thumbnail based on config)
+                if use_full_size:
+                    image_data = dbx_client.get_file_content(file_path)
+                    if not image_data:
+                        logger.warning(f"Could not download full-size photo: {file_path}")
+                        errors += 1
+                        continue
+                else:
+                    # Get thumbnail size from config
+                    thumbnail_size = face_config.get("thumbnail_size", "w256h256")
+                    image_data = dbx_client.get_thumbnail(file_path, size=thumbnail_size)
+                    if not image_data:
+                        logger.warning(f"Could not get thumbnail for {file_path}")
+                        errors += 1
+                        continue
+
+                # Detect faces and check for matches
+                face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
+
+                if face_matches:
+                    match_info = {
+                        "file_path": file_path,
+                        "num_matches": len(face_matches),
+                        "total_faces": total_faces,
+                        "matches": face_matches,
+                    }
+                    matches.append(match_info)
+                    logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
+
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+                errors += 1
+
+        # Print summary
+        logger.info("=" * 70)
+        logger.info("Processing Complete")
+        logger.info("=" * 70)
+        logger.info(f"Total images processed: {processed}")
+        logger.info(f"Matching images found: {len(matches)}")
+        logger.info(f"Errors: {errors}")
+        logger.info("")
+
+        if matches:
+            logger.info(f"Found {len(matches)} image(s) with matching faces:")
+            for match in matches:
+                logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
+
+            if dry_run:
+                logger.info("")
+                logger.info("DRY RUN MODE - No files were copied/moved")
+                logger.info("Remove --dry-run flag or set dry_run: false in config to perform actual operations")
+            else:
+                logger.info("")
+                logger.info(f"Performing {operation} operations...")
+
+                success_count = 0
+                skipped_count = 0
+                processed_destinations = set()
+
+                for match in matches:
+                    source_path = match["file_path"]
+                    # Generate destination path
+                    filename = os.path.basename(source_path)
+                    dest_path = f"{destination_folder}/{filename}"
+
+                    # Skip if we've already processed this destination in this run
+                    if dest_path in processed_destinations:
+                        skipped_count += 1
+                        logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
+                        continue
+
+                    processed_destinations.add(dest_path)
+                    log_entry = safe_organize(dbx_client, source_path, dest_path, operation, log_file)
+
+                    if log_entry["success"]:
+                        success_count += 1
+                        logger.info(f"✓ {operation.capitalize()}d: {source_path} → {dest_path}")
+                    else:
+                        logger.error(f"✗ Failed to {operation}: {source_path}")
+
+                logger.info("")
+                logger.info(f"Successfully {operation}d {success_count}/{len(matches)} file(s)")
+                if skipped_count > 0:
+                    logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
+        else:
+            logger.info("No matching images found")
 
         return 0
 
