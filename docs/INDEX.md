@@ -79,6 +79,14 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - Troubleshooting CI failures
 - Best practices for development
 
+**[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)**
+- Branch protection rules for main branch
+- Required status checks and PR reviews
+- Implementation guide and setup script
+- Working with protected branches
+- Solo developer workflow
+- Troubleshooting and best practices
+
 ---
 
 ## Project Status
@@ -111,6 +119,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
+| [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
 
 ---
