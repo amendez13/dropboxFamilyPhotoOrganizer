@@ -110,8 +110,56 @@ def safe_organize(dbx, source_path: str, dest_path: str, operation: str = "copy"
     return log_entry
 
 
+def _download_image(dbx_client, file_path, face_config, use_full_size):
+    """
+    Download image data from Dropbox.
+
+    Args:
+        dbx_client: Initialized DropboxClient instance
+        file_path: Dropbox path to the image file
+        face_config: Face recognition config dict (contains thumbnail_size)
+        use_full_size: If True, download full-size; otherwise get thumbnail
+
+    Returns:
+        Tuple of (image_data, error_message) where image_data is bytes or None,
+        and error_message is a string describing the failure or None on success.
+    """
+    if use_full_size:
+        image_data = dbx_client.get_file_content(file_path)
+        if not image_data:
+            return None, f"Could not download full-size photo: {file_path}"
+        return image_data, None
+
+    thumbnail_size = face_config.get("thumbnail_size", "w256h256")
+    image_data = dbx_client.get_thumbnail(file_path, size=thumbnail_size)
+    if not image_data:
+        return None, f"Could not get thumbnail for {file_path}"
+    return image_data, None
+
+
 def process_images(image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger):
-    """Process images and find matches."""
+    """
+    Process images from Dropbox and find face matches.
+
+    Downloads each image (as thumbnail or full-size) and runs face recognition
+    to identify matches against the loaded reference photos.
+
+    Args:
+        image_files: List of Dropbox FileMetadata objects to process
+        dbx_client: Initialized DropboxClient instance for downloading images
+        provider: Face recognition provider with loaded reference encodings
+        face_config: Face recognition configuration dict (contains thumbnail_size)
+        use_full_size: If True, download full-size photos; otherwise use thumbnails
+        tolerance: Face matching tolerance (lower = stricter matching)
+        verbose_processing: If True, log every image; otherwise log every 10th
+        logger: Logger instance for output
+
+    Returns:
+        Tuple of (matches, processed, errors) where:
+        - matches: List of dicts with file_path, num_matches, total_faces, matches
+        - processed: Total number of images processed
+        - errors: Number of images that failed to process
+    """
     matches = []
     processed = 0
     errors = 0
@@ -129,20 +177,11 @@ def process_images(image_files, dbx_client, provider, face_config, use_full_size
 
         try:
             # Download image data (full-size or thumbnail based on config)
-            if use_full_size:
-                image_data = dbx_client.get_file_content(file_path)
-                if not image_data:
-                    logger.warning(f"Could not download full-size photo: {file_path}")
-                    errors += 1
-                    continue
-            else:
-                # Get thumbnail size from config
-                thumbnail_size = face_config.get("thumbnail_size", "w256h256")
-                image_data = dbx_client.get_thumbnail(file_path, size=thumbnail_size)
-                if not image_data:
-                    logger.warning(f"Could not get thumbnail for {file_path}")
-                    errors += 1
-                    continue
+            image_data, error_msg = _download_image(dbx_client, file_path, face_config, use_full_size)
+            if not image_data:
+                logger.warning(error_msg)
+                errors += 1
+                continue
 
             # Detect faces and check for matches
             face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
@@ -157,15 +196,39 @@ def process_images(image_files, dbx_client, provider, face_config, use_full_size
                 matches.append(match_info)
                 logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
 
+        except (OSError, IOError) as e:
+            logger.error(f"Image processing error for {file_path}: {e}")
+            errors += 1
+        except ValueError as e:
+            logger.warning(f"Invalid image data for {file_path}: {e}")
+            errors += 1
         except Exception as e:
-            logger.error(f"Error processing {file_path}: {e}")
+            logger.error(f"Unexpected error processing {file_path}: {e}", exc_info=True)
             errors += 1
 
     return matches, processed, errors
 
 
 def perform_operations(matches, destination_folder, dbx_client, operation, log_file, dry_run, logger):
-    """Perform copy/move operations on matched files."""
+    """
+    Perform copy/move operations on files that matched face recognition.
+
+    Copies or moves matched files to the destination folder, handling duplicates
+    and logging all operations for audit purposes.
+
+    Args:
+        matches: List of match dicts from process_images(), each containing
+                 file_path, num_matches, total_faces, and matches keys
+        destination_folder: Dropbox path where matched files will be copied/moved
+        dbx_client: Initialized DropboxClient instance for file operations
+        operation: Operation type - either 'copy' or 'move'
+        log_file: Path to log file for recording operations, or None to disable
+        dry_run: If True, only report what would be done without actual operations
+        logger: Logger instance for output
+
+    Returns:
+        None. Results are logged via the logger parameter.
+    """
     if not matches:
         logger.info("No matching images found")
         return
@@ -191,7 +254,7 @@ def perform_operations(matches, destination_folder, dbx_client, operation, log_f
         source_path = match["file_path"]
         # Generate destination path
         filename = os.path.basename(source_path)
-        dest_path = f"{destination_folder}/{filename}"
+        dest_path = os.path.join(destination_folder, filename)
 
         # Skip if we've already processed this destination in this run
         if dest_path in processed_destinations:
@@ -212,6 +275,30 @@ def perform_operations(matches, destination_folder, dbx_client, operation, log_f
     logger.info(f"Successfully {operation}d {success_count}/{len(matches)} file(s)")
     if skipped_count > 0:
         logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
+
+
+def _get_reference_photos(reference_photos_dir, image_extensions):
+    """
+    Find reference photos in the specified directory.
+
+    Args:
+        reference_photos_dir: Path to directory containing reference photos
+        image_extensions: List of valid image extensions (e.g., ['.jpg', '.png'])
+
+    Returns:
+        List of paths to reference photo files, excluding system files.
+    """
+    import glob
+
+    reference_photos = []
+    for ext in image_extensions:
+        pattern = f"{reference_photos_dir}/*{ext}"
+        reference_photos.extend(glob.glob(pattern))
+
+    # Remove duplicates and system files
+    reference_photos = list(set(reference_photos))
+    reference_photos = [p for p in reference_photos if not os.path.basename(p).startswith(".")]
+    return reference_photos
 
 
 def main():
@@ -241,6 +328,14 @@ def main():
         dropbox_config = config.get("dropbox", {})
         source_folder = dropbox_config.get("source_folder")
         destination_folder = dropbox_config.get("destination_folder")
+
+        # Validate required configuration
+        if not source_folder or not destination_folder:
+            logger.error("Source and destination folders must be configured")
+            return 1
+        if source_folder == destination_folder:
+            logger.error("Source and destination folders must be different")
+            return 1
 
         # Get face recognition configuration
         face_config = config.get("face_recognition", {})
@@ -311,16 +406,7 @@ def main():
 
         # Load reference photos
         logger.info(f"Loading reference photos from {reference_photos_dir}...")
-        import glob
-
-        reference_photos = []
-        for ext in image_extensions:
-            pattern = f"{reference_photos_dir}/*{ext}"
-            reference_photos.extend(glob.glob(pattern))
-
-        # Remove duplicates and system files
-        reference_photos = list(set(reference_photos))
-        reference_photos = [p for p in reference_photos if not os.path.basename(p).startswith(".")]
+        reference_photos = _get_reference_photos(reference_photos_dir, image_extensions)
 
         if not reference_photos:
             logger.error(f"No reference photos found in {reference_photos_dir}")

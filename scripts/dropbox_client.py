@@ -253,7 +253,7 @@ class DropboxClient:
             self.logger.error(f"Error downloading file '{dropbox_path}': {e}")
             return False
 
-    def get_thumbnail(self, dropbox_path: str, size: str = "w2048h1536", format: str = "jpeg") -> Optional[bytes]:
+    def get_thumbnail(self, dropbox_path: str, size: str = "w256h256", format: str = "jpeg") -> Optional[bytes]:
         """
         Get a thumbnail of an image file.
 
