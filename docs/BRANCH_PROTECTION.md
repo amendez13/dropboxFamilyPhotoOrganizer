@@ -31,16 +31,16 @@ Branch protection rules help maintain code quality by requiring specific checks 
 All CI checks must pass before merging:
 
 **Strict Status Checks:**
-- `lint / Lint and Code Quality` - Code formatting, linting, and type checking
-- `test / Test Python (3.10)` - Tests on Python 3.10
-- `test / Test Python (3.11)` - Tests on Python 3.11
-- `test / Test Python (3.12)` - Tests on Python 3.12
-- `validate-config / Validate Configuration` - Configuration file validation
-- `build-status / CI Status Check` - Final CI status verification
+- `Lint and Code Quality` - Code formatting, linting, and type checking
+- `Test Python 3.10` - Tests on Python 3.10
+- `Test Python 3.11` - Tests on Python 3.11
+- `Test Python 3.12` - Tests on Python 3.12
+- `Validate Configuration` - Configuration file validation
+- `CI Status Check` - Final CI status verification
 
 **Non-blocking Checks:**
-- `security / Security Checks` - Security scans (warnings allowed)
-- `integration / Integration Tests` - Integration tests (when enabled)
+- `Security Checks` - Security scans (warnings allowed)
+- `Integration Tests` - Integration tests (when enabled)
 
 **Configuration:**
 - **Require branches to be up to date before merging**: ✅ Enabled

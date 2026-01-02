@@ -2,12 +2,12 @@
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "lint / Lint and Code Quality",
-      "test / Test Python (3.10)",
-      "test / Test Python (3.11)",
-      "test / Test Python (3.12)",
-      "validate-config / Validate Configuration",
-      "build-status / CI Status Check"
+      "Lint and Code Quality",
+      "Test Python 3.10",
+      "Test Python 3.11",
+      "Test Python 3.12",
+      "Validate Configuration",
+      "CI Status Check"
     ]
   },
   "enforce_admins": true,
