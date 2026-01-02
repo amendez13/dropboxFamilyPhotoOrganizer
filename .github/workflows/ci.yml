@@ -72,7 +72,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing || echo "No tests found yet"
+        pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
