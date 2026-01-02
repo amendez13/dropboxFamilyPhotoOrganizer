@@ -85,7 +85,8 @@ processing:
   # Batch size for processing photos
   batch_size: 50
 
-  # Use full-size photos instead of thumbnails (slower but more accurate)
+  # Use full-size photos instead of thumbnails (higher accuracy, slower, more bandwidth)
+  # Set to true when thumbnails produce poor face detection results
   use_full_size_photos: false
 
   # Supported image extensions
