@@ -10,7 +10,7 @@ import yaml
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.dropbox_client import DropboxClient
+from scripts.dropbox_client import DropboxClient  # noqa: E402
 
 # Load config
 with open("config/config.yaml", "r") as f:
@@ -40,7 +40,7 @@ try:
             print(f"  {folder}")
 
     if files:
-        print(f"\nFILES (showing first 10):")
+        print("\nFILES (showing first 10):")
         for f in sorted(files)[:10]:
             print(f"  {f}")
 

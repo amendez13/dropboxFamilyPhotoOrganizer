@@ -11,7 +11,7 @@ import numpy as np
 
 try:
     import boto3
-    from botocore.exceptions import BotoCoreError, ClientError
+    from botocore.exceptions import ClientError
 
     AWS_AVAILABLE = True
 except ImportError:
@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch
+from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch  # noqa: E402
 
 
 class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -162,8 +162,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
             face_encodings = []
             for face_detail in response["FaceDetails"]:
-                # Extract bounding box
-                bbox = face_detail["BoundingBox"]
+                # Extract confidence
                 confidence = face_detail["Confidence"]
 
                 # Create FaceEncoding (encoding array is empty for AWS)
