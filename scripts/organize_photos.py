@@ -349,54 +349,9 @@ def main():
             return 0
 
         # Process images
-        matches = []
-        processed = 0
-        errors = 0
-
-        logger.info("=" * 70)
-        logger.info("Processing images...")
-        logger.info("=" * 70)
-
-        for file_metadata in image_files:
-            file_path = file_metadata.path_display
-            processed += 1
-
-            if verbose_processing or processed % 10 == 0:
-                logger.info(f"Processing {processed}/{len(image_files)}: {file_path}")
-
-            try:
-                # Download image data (full-size or thumbnail based on config)
-                if use_full_size:
-                    image_data = dbx_client.get_file_content(file_path)
-                    if not image_data:
-                        logger.warning(f"Could not download full-size photo: {file_path}")
-                        errors += 1
-                        continue
-                else:
-                    # Get thumbnail size from config
-                    thumbnail_size = face_config.get("thumbnail_size", "w256h256")
-                    image_data = dbx_client.get_thumbnail(file_path, size=thumbnail_size)
-                    if not image_data:
-                        logger.warning(f"Could not get thumbnail for {file_path}")
-                        errors += 1
-                        continue
-
-                # Detect faces and check for matches
-                face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
-
-                if face_matches:
-                    match_info = {
-                        "file_path": file_path,
-                        "num_matches": len(face_matches),
-                        "total_faces": total_faces,
-                        "matches": face_matches,
-                    }
-                    matches.append(match_info)
-                    logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
-
-            except Exception as e:
-                logger.error(f"Error processing {file_path}: {e}")
-                errors += 1
+        matches, processed, errors = process_images(
+            image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger
+        )
 
         # Print summary
         logger.info("=" * 70)
@@ -407,50 +362,8 @@ def main():
         logger.info(f"Errors: {errors}")
         logger.info("")
 
-        if matches:
-            logger.info(f"Found {len(matches)} image(s) with matching faces:")
-            for match in matches:
-                logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
-
-            if dry_run:
-                logger.info("")
-                logger.info("DRY RUN MODE - No files were copied/moved")
-                logger.info("Remove --dry-run flag or set dry_run: false in config to perform actual operations")
-            else:
-                logger.info("")
-                logger.info(f"Performing {operation} operations...")
-
-                success_count = 0
-                skipped_count = 0
-                processed_destinations = set()
-
-                for match in matches:
-                    source_path = match["file_path"]
-                    # Generate destination path
-                    filename = os.path.basename(source_path)
-                    dest_path = f"{destination_folder}/{filename}"
-
-                    # Skip if we've already processed this destination in this run
-                    if dest_path in processed_destinations:
-                        skipped_count += 1
-                        logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
-                        continue
-
-                    processed_destinations.add(dest_path)
-                    log_entry = safe_organize(dbx_client, source_path, dest_path, operation, log_file)
-
-                    if log_entry["success"]:
-                        success_count += 1
-                        logger.info(f"✓ {operation.capitalize()}d: {source_path} → {dest_path}")
-                    else:
-                        logger.error(f"✗ Failed to {operation}: {source_path}")
-
-                logger.info("")
-                logger.info(f"Successfully {operation}d {success_count}/{len(matches)} file(s)")
-                if skipped_count > 0:
-                    logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
-        else:
-            logger.info("No matching images found")
+        # Perform operations
+        perform_operations(matches, destination_folder, dbx_client, operation, log_file, dry_run, logger)
 
         return 0
 
