@@ -16,7 +16,7 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from dropbox_client import DropboxClient
+from dropbox_client import DropboxClient  # noqa: E402
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -137,13 +137,10 @@ def main():
 
         # Extract configuration values
         access_token = config["dropbox"]["access_token"]
-        source_folder = config["dropbox"]["source_folder"]
-        dest_folder = config["dropbox"]["destination_folder"]
 
         # Get processing configuration
         processing = config.get("processing", {})
         dry_run = args.dry_run or processing.get("dry_run", False)
-        image_extensions = processing.get("image_extensions", [".jpg", ".jpeg", ".png", ".heic"])
 
         # Determine operation mode (CLI flag takes precedence)
         if args.move:

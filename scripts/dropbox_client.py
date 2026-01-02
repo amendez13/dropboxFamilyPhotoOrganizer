@@ -153,6 +153,21 @@ class DropboxClient:
             self.logger.error(f"Connection verification failed: {e}")
             return False
 
+    def _normalize_folder_path(self, folder_path: str) -> str:
+        """Normalize folder path for Dropbox API."""
+        if folder_path and not folder_path.startswith("/"):
+            folder_path = "/" + folder_path
+        if folder_path == "/":
+            folder_path = ""
+        return folder_path
+
+    def _should_include_file(self, filename: str, extensions: Optional[List[str]]) -> bool:
+        """Check if file should be included based on extension filter."""
+        if not extensions:
+            return True
+        _, ext = os.path.splitext(filename.lower())
+        return ext in [e.lower() for e in extensions]
+
     def list_folder_recursive(
         self, folder_path: str, extensions: Optional[List[str]] = None
     ) -> Generator[FileMetadata, None, None]:
@@ -168,12 +183,7 @@ class DropboxClient:
             FileMetadata objects for each file
         """
         try:
-            # Normalize folder path
-            if folder_path and not folder_path.startswith("/"):
-                folder_path = "/" + folder_path
-            if folder_path == "/":
-                folder_path = ""
-
+            folder_path = self._normalize_folder_path(folder_path)
             self.logger.info(f"Listing files in: {folder_path or '/'}")
 
             # Initial request
@@ -184,12 +194,7 @@ class DropboxClient:
                 for entry in result.entries:
                     # Only yield files, not folders
                     if isinstance(entry, FileMetadata):
-                        # Filter by extension if specified
-                        if extensions:
-                            _, ext = os.path.splitext(entry.name.lower())
-                            if ext in [e.lower() for e in extensions]:
-                                yield entry
-                        else:
+                        if self._should_include_file(entry.name, extensions):
                             yield entry
 
                 # Check if there are more results

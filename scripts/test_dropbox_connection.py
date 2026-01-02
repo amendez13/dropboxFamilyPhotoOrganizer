@@ -12,7 +12,7 @@ import yaml
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.auth import DropboxClientFactory
+from scripts.auth import DropboxClientFactory  # noqa: E402
 
 
 def load_config(config_path: str = "config/config.yaml") -> dict:
@@ -27,6 +27,59 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
     except yaml.YAMLError as e:
         print(f"Error parsing configuration file: {e}")
         sys.exit(1)
+
+
+def _test_connection(client) -> bool:
+    """Test Dropbox connection."""
+    print("\n[Test 1] Verifying Dropbox connection...")
+    if client.verify_connection():
+        print("✓ Successfully connected to Dropbox")
+        return True
+    else:
+        print("✗ Failed to connect to Dropbox")
+        print("  Please check your access token in config/config.yaml")
+        return False
+
+
+def _test_file_listing(client, source_folder: str, image_extensions: list) -> int:
+    """Test file listing in source folder."""
+    print(f"\n[Test 2] Listing files in source folder: {source_folder}")
+    file_count = 0
+    print(f"\nScanning for image files ({', '.join(image_extensions)})...")
+
+    for file_metadata in client.list_folder_recursive(source_folder, image_extensions):
+        file_count += 1
+        if file_count <= 10:  # Show first 10 files
+            print(f"  - {file_metadata.path_display} ({file_metadata.size} bytes)")
+        elif file_count == 11:
+            print("  ...")
+
+    print(f"\n✓ Found {file_count} image files in '{source_folder}'")
+
+    if file_count == 0:
+        print("\nNote: No image files found. Please check:")
+        print(f"  1. The folder path is correct: {source_folder}")
+        print(f"  2. The folder contains images with extensions: {', '.join(image_extensions)}")
+        print("  3. You have read permissions for this folder")
+
+    return file_count
+
+
+def _test_thumbnail(client, source_folder: str, image_extensions: list, config: dict):
+    """Test thumbnail download."""
+    print("\n[Test 3] Testing thumbnail download...")
+    # Get first file for testing
+    first_file = next(client.list_folder_recursive(source_folder, image_extensions))
+    thumbnail_size = config["face_recognition"]["thumbnail_size"]
+
+    print(f"Getting thumbnail for: {first_file.name}")
+    thumbnail_data = client.get_thumbnail(first_file.path_display, size=thumbnail_size)
+
+    if thumbnail_data:
+        print(f"✓ Successfully retrieved thumbnail ({len(thumbnail_data)} bytes)")
+    else:
+        print("✗ Could not retrieve thumbnail")
+        print("  Note: Some file types may not support thumbnails")
 
 
 def main():
@@ -57,35 +110,12 @@ def main():
         sys.exit(1)
 
     # Test 1: Verify connection
-    print("\n[Test 1] Verifying Dropbox connection...")
-    if client.verify_connection():
-        print("✓ Successfully connected to Dropbox")
-    else:
-        print("✗ Failed to connect to Dropbox")
-        print("  Please check your access token in config/config.yaml")
+    if not _test_connection(client):
         sys.exit(1)
 
     # Test 2: List files in source folder
-    print(f"\n[Test 2] Listing files in source folder: {source_folder}")
     try:
-        file_count = 0
-        print(f"\nScanning for image files ({', '.join(image_extensions)})...")
-
-        for file_metadata in client.list_folder_recursive(source_folder, image_extensions):
-            file_count += 1
-            if file_count <= 10:  # Show first 10 files
-                print(f"  - {file_metadata.path_display} ({file_metadata.size} bytes)")
-            elif file_count == 11:
-                print("  ...")
-
-        print(f"\n✓ Found {file_count} image files in '{source_folder}'")
-
-        if file_count == 0:
-            print("\nNote: No image files found. Please check:")
-            print(f"  1. The folder path is correct: {source_folder}")
-            print(f"  2. The folder contains images with extensions: {', '.join(image_extensions)}")
-            print("  3. You have read permissions for this folder")
-
+        file_count = _test_file_listing(client, source_folder, image_extensions)
     except Exception as e:
         print(f"✗ Error listing files: {e}")
         print("\nPossible issues:")
@@ -96,21 +126,8 @@ def main():
 
     # Test 3: Test thumbnail API
     if file_count > 0:
-        print("\n[Test 3] Testing thumbnail download...")
         try:
-            # Get first file for testing
-            first_file = next(client.list_folder_recursive(source_folder, image_extensions))
-            thumbnail_size = config["face_recognition"]["thumbnail_size"]
-
-            print(f"Getting thumbnail for: {first_file.name}")
-            thumbnail_data = client.get_thumbnail(first_file.path_display, size=thumbnail_size)
-
-            if thumbnail_data:
-                print(f"✓ Successfully retrieved thumbnail ({len(thumbnail_data)} bytes)")
-            else:
-                print("✗ Could not retrieve thumbnail")
-                print("  Note: Some file types may not support thumbnails")
-
+            _test_thumbnail(client, source_folder, image_extensions, config)
         except Exception as e:
             print(f"✗ Error testing thumbnail: {e}")
 

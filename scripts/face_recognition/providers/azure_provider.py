@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch
+from scripts.face_recognition.base_provider import BaseFaceRecognitionProvider, FaceEncoding, FaceMatch  # noqa: E402
 
 
 class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
@@ -95,7 +95,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         try:
             self.client.person_group.get(self.person_group_id)
             self.logger.info(f"Using existing person group: {self.person_group_id}")
-        except:
+        except Exception:
             # Create new person group
             self.client.person_group.create(
                 person_group_id=self.person_group_id,
@@ -122,6 +122,47 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             self.logger.error(f"Error creating/getting person: {e}")
             raise
 
+    def _add_reference_face(self, photo_path: str) -> bool:
+        """Add a single reference face from photo path."""
+        if not os.path.exists(photo_path):
+            self.logger.warning(f"Reference photo not found: {photo_path}")
+            return False
+
+        try:
+            with open(photo_path, "rb") as f:
+                image_data = f.read()
+
+            # Add face to person
+            self.client.person_group_person.add_face_from_stream(
+                self.person_group_id, self.person_id, image_data, detection_model="detection_03"  # Latest model
+            )
+
+            # Store as FaceEncoding for compatibility
+            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path))  # Placeholder
+
+            self.logger.info(f"Added reference face from: {photo_path}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error adding reference photo {photo_path}: {e}")
+            return False
+
+    def _train_person_group(self):
+        """Train the person group and wait for completion."""
+        self.logger.info("Training Azure Face model...")
+        self.client.person_group.train(self.person_group_id)
+
+        # Wait for training to complete
+        while True:
+            training_status = self.client.person_group.get_training_status(self.person_group_id)
+            if training_status.status == TrainingStatusType.succeeded:
+                self.logger.info("Training completed successfully")
+                break
+            elif training_status.status == TrainingStatusType.failed:
+                raise Exception(f"Training failed: {training_status.message}")
+
+            time.sleep(1)
+
     def load_reference_photos(self, photo_paths: List[str]) -> int:
         """
         Load reference photos and train Azure person model.
@@ -138,51 +179,15 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         # Create or get person
         self._create_or_get_person()
 
-        face_count = 0
-
-        for photo_path in photo_paths:
-            if not os.path.exists(photo_path):
-                self.logger.warning(f"Reference photo not found: {photo_path}")
-                continue
-
-            try:
-                with open(photo_path, "rb") as f:
-                    image_data = f.read()
-
-                # Add face to person
-                self.client.person_group_person.add_face_from_stream(
-                    self.person_group_id, self.person_id, image_data, detection_model="detection_03"  # Latest model
-                )
-
-                face_count += 1
-
-                # Store as FaceEncoding for compatibility
-                self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path))  # Placeholder
-
-                self.logger.info(f"Added reference face from: {photo_path}")
-
-            except Exception as e:
-                self.logger.error(f"Error adding reference photo {photo_path}: {e}")
+        # Add all reference faces
+        face_count = sum(1 for photo_path in photo_paths if self._add_reference_face(photo_path))
 
         if face_count == 0:
             raise Exception("No reference faces could be added")
 
         # Train the person group
-        self.logger.info("Training Azure Face model...")
         try:
-            self.client.person_group.train(self.person_group_id)
-
-            # Wait for training to complete
-            while True:
-                training_status = self.client.person_group.get_training_status(self.person_group_id)
-                if training_status.status == TrainingStatusType.succeeded:
-                    self.logger.info("Training completed successfully")
-                    break
-                elif training_status.status == TrainingStatusType.failed:
-                    raise Exception(f"Training failed: {training_status.message}")
-
-                time.sleep(1)
-
+            self._train_person_group()
         except Exception as e:
             self.logger.error(f"Training error: {e}")
             raise
