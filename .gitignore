@@ -40,6 +40,13 @@ ENV/
 # Logs
 *.log
 
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
 # Temporary files
 temp/
 tmp/
