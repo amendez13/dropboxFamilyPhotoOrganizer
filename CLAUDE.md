@@ -9,11 +9,12 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
 **Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Copy/move matches to target directory.
 
 ## Constraints and Best Practices
-* This project is heavily documentation based in order to provide AI with proper context and aid human developers and watchers the ability to easily understand the detailes. So, before doing any task read all relevant docs, but in particular:
+* This project is heavily documentation based in order to provide AI with proper context and aid human developers and watchers the ability to easily understand the detailes. So, if the task to be done does not provide a specific scope defined by a mention to a particular file or directory, then please read the flowing docs:
    * README.md
-   * docs/FACE_RECOGNITION_ARCHITECTURE.md
+   * docs/INDEX.md
+* Once you have read those docs, understand if you need further context from additional docs that are referenced in theser. If so read them as well.
    * docs/planning/TASK_MANAGEMENT.md
-* After finishing any task, check the docs/ and the README.md and make any updates that are necessary given the changes in codebase.
+* After finishing any task, given your knowledge of projext structure and indexed documentationn (INDEX.md), make any necessary updates to the documentation given the changes in codebase.
 * Repo Etiquette: [E.g., Branch as `feature/user-auth`; rebase before PRs; commit messages: "feat: add login endpoint". or "bug fix: etc"]
 
 ## Architecture

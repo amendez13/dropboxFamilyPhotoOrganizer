@@ -57,8 +57,6 @@ fi
 
 echo -e "${YELLOW}This will configure the following branch protection rules:${NC}"
 echo ""
-echo "✓ Require pull request reviews (1 approval minimum)"
-echo "✓ Dismiss stale reviews when new commits are pushed"
 echo "✓ Require status checks to pass:"
 echo "  - lint / Lint and Code Quality"
 echo "  - test / Test Python (3.10)"
@@ -72,6 +70,9 @@ echo "✓ Require conversation resolution before merging"
 echo "✓ Prevent force pushes to $BRANCH"
 echo "✓ Prevent deletion of $BRANCH"
 echo "✓ Apply rules to administrators"
+echo ""
+echo -e "${YELLOW}Note:${NC} PR approval is disabled for solo development (GitHub doesn't allow"
+echo "self-approval). Protection still ensures CI passes and conversations are resolved."
 echo ""
 
 # Prompt for confirmation

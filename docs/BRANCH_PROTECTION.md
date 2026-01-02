@@ -50,17 +50,21 @@ All CI checks must pass before merging:
 ### Pull Request Requirements
 
 **Require Pull Request Reviews:**
-- **Required approving reviews**: 1
-  - At least one person must review and approve changes
-  - For solo developers: Self-review is acceptable for most changes
-  - For security-critical or major changes: Consider requesting external review
+- ❌ Disabled for solo development
+  - GitHub doesn't allow PR authors to approve their own PRs
+  - For solo developers: Protection still ensures CI passes and conversations are resolved
+  - Can be enabled when working with a team by setting `required_approving_review_count`
+  - For critical changes: Consider requesting external review even as a solo developer
 
-**Dismiss stale pull request approvals when new commits are pushed:**
-- ✅ Enabled
-- Ensures reviewers see the final version before merge
+**Note for Solo Developers:**
+- While PR approval is disabled, you still benefit from:
+  - Required status checks (all CI must pass)
+  - Conversation resolution requirement
+  - Linear history enforcement
+  - Protection against accidental force pushes/deletions
 
 **Require review from Code Owners:**
-- ❌ Disabled (can be enabled if you create a CODEOWNERS file)
+- ❌ Disabled (can be enabled if you create a CODEOWNERS file and work with a team)
 
 ### Additional Protections
 
