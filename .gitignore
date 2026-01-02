@@ -1,8 +1,15 @@
 # Config files with sensitive data
 config/config.yaml
 
-# Reference photos
+# Reference photos (both naming conventions)
 reference_photos/
+referencePhotos/
+
+# Personal notes
+notes/
+
+# macOS system files
+.DS_Store
 
 # Python
 __pycache__/

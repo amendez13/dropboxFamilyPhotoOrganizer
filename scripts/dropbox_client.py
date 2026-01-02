@@ -299,6 +299,24 @@ class DropboxClient:
             self.logger.warning(f"Could not get thumbnail for '{dropbox_path}': {e}")
             return None
 
+    def get_file_content(self, dropbox_path: str) -> Optional[bytes]:
+        """
+        Download the full content of a file from Dropbox.
+
+        Args:
+            dropbox_path: Path to file in Dropbox
+
+        Returns:
+            File content as bytes, or None if failed
+        """
+        try:
+            metadata, response = self.dbx.files_download(dropbox_path)
+            return response.content
+
+        except ApiError as e:
+            self.logger.warning(f"Could not download file '{dropbox_path}': {e}")
+            return None
+
     def copy_file(self, source_path: str, dest_path: str, autorename: bool = True, allow_shared_folder: bool = False) -> bool:
         """
         Copy a file to a different location in Dropbox.

@@ -42,8 +42,19 @@ face_recognition:
 
   # Local provider settings
   local:
-    model: "hog"  # 'hog' (faster, CPU) or 'cnn' (more accurate, GPU)
-    num_jitters: 1  # Higher = more accurate but slower
+    # Detection model: 'hog' (fast, CPU-friendly) or 'cnn' (accurate, GPU-preferred)
+    model: "hog"
+
+    # Encoding model: 'small' (faster) or 'large' (more accurate, 68 facial landmarks)
+    encoding_model: "large"
+
+    # Training parameters (used by train_face_model.py)
+    training:
+      num_jitters: 50  # 50-100 for maximum accuracy (slow but done once)
+
+    # Recognition parameters (used by organize_photos.py)
+    recognition:
+      num_jitters: 1   # 1-10 for speed when processing Dropbox photos
 
   # AWS Rekognition settings (only needed if provider is 'aws')
   aws:
@@ -73,6 +84,10 @@ processing:
 
   # Batch size for processing photos
   batch_size: 50
+
+  # Use full-size photos instead of thumbnails (higher accuracy, slower, more bandwidth)
+  # Set to true when thumbnails produce poor face detection results
+  use_full_size_photos: false
 
   # Supported image extensions
   image_extensions:
