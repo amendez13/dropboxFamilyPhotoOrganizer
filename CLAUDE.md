@@ -15,6 +15,7 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
 * Once you have read those docs, understand if you need further context from additional docs that are referenced in theser. If so read them as well.
    * docs/planning/TASK_MANAGEMENT.md
 * After finishing any task, given your knowledge of projext structure and indexed documentationn (INDEX.md), make any necessary updates to the documentation given the changes in codebase.
+* Always when committing, pre-commit checks must run. If pre-commit doesnt run find out reason and fix it.
 * Repo Etiquette: [E.g., Branch as `feature/user-auth`; rebase before PRs; commit messages: "feat: add login endpoint". or "bug fix: etc"]
 
 ## Architecture
