@@ -95,8 +95,9 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         try:
             self.client.person_group.get(self.person_group_id)
             self.logger.info(f"Using existing person group: {self.person_group_id}")
-        except Exception:
-            # Create new person group
+        except Exception as e:
+            # Person group doesn't exist, create it
+            self.logger.debug(f"Person group not found, creating new one: {e}")
             self.client.person_group.create(
                 person_group_id=self.person_group_id,
                 name="Dropbox Photo Organizer",

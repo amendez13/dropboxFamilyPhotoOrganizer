@@ -68,18 +68,22 @@ def _test_file_listing(client, source_folder: str, image_extensions: list) -> in
 def _test_thumbnail(client, source_folder: str, image_extensions: list, config: dict):
     """Test thumbnail download."""
     print("\n[Test 3] Testing thumbnail download...")
-    # Get first file for testing
-    first_file = next(client.list_folder_recursive(source_folder, image_extensions))
-    thumbnail_size = config["face_recognition"]["thumbnail_size"]
+    try:
+        # Get first file for testing
+        first_file = next(client.list_folder_recursive(source_folder, image_extensions))
+        thumbnail_size = config["face_recognition"]["thumbnail_size"]
 
-    print(f"Getting thumbnail for: {first_file.name}")
-    thumbnail_data = client.get_thumbnail(first_file.path_display, size=thumbnail_size)
+        print(f"Getting thumbnail for: {first_file.name}")
+        thumbnail_data = client.get_thumbnail(first_file.path_display, size=thumbnail_size)
 
-    if thumbnail_data:
-        print(f"✓ Successfully retrieved thumbnail ({len(thumbnail_data)} bytes)")
-    else:
-        print("✗ Could not retrieve thumbnail")
-        print("  Note: Some file types may not support thumbnails")
+        if thumbnail_data:
+            print(f"✓ Successfully retrieved thumbnail ({len(thumbnail_data)} bytes)")
+        else:
+            print("✗ Could not retrieve thumbnail")
+            print("  Note: Some file types may not support thumbnails")
+    except StopIteration:
+        print("✗ No files found to test thumbnail download")
+        print("  Note: Cannot test thumbnails without image files")
 
 
 def main():
