@@ -226,7 +226,7 @@ class TestPerformOperations:
         perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
 
         mock_dbx_client.copy_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
-        mock_logger.info.assert_any_call("✓ Copyd: /Photos/test.jpg → /Matches/test.jpg")
+        mock_logger.info.assert_any_call("✓ Copied: /Photos/test.jpg → /Matches/test.jpg")
 
     def test_perform_operations_successful_move(self, mock_dbx_client, mock_logger):
         """Test successful move operations."""
@@ -264,7 +264,7 @@ class TestPerformOperations:
 
         perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
 
-        mock_logger.info.assert_any_call("Successfully copyd 2/2 file(s)")
+        mock_logger.info.assert_any_call("Successfully copied 2/2 file(s)")
 
     def test_perform_operations_no_matches(self, mock_dbx_client, mock_logger):
         """Test handling when no matches are found."""
