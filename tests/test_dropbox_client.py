@@ -90,5 +90,43 @@ class TestDropboxClientHelpers:
         assert result is True
 
 
+class TestGetFileContent:
+    """Test get_file_content method."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock DropboxClient instance."""
+        mock_dbx = MagicMock()
+        client = DropboxClient.__new__(DropboxClient)
+        client.dbx = mock_dbx
+        client.logger = Mock()
+        return client
+
+    def test_get_file_content_returns_bytes(self, mock_client):
+        """Test that successful download returns bytes."""
+        # Mock successful download
+        mock_response = MagicMock()
+        mock_response.content = b"file_content_bytes"
+        mock_client.dbx.files_download.return_value = (MagicMock(), mock_response)
+
+        result = mock_client.get_file_content("/test/file.jpg")
+
+        assert result == b"file_content_bytes"
+        mock_client.dbx.files_download.assert_called_once_with("/test/file.jpg")
+
+    def test_get_file_content_handles_api_error(self, mock_client):
+        """Test that API errors return None and are logged."""
+        from dropbox.exceptions import ApiError
+
+        # Mock API error
+        mock_client.dbx.files_download.side_effect = ApiError("test", "not_found", "File not found", "en")
+
+        result = mock_client.get_file_content("/test/missing.jpg")
+
+        assert result is None
+        mock_client.logger.warning.assert_called_once()
+        assert "Could not download file '/test/missing.jpg'" in mock_client.logger.warning.call_args[0][0]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
