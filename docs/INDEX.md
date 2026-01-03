@@ -50,6 +50,12 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ## Analysis & Tuning
 
+**[NOTEBOOK_GUIDE.md](NOTEBOOK_GUIDE.md)**
+- Complete guide to using the tuning notebook
+- Step-by-step workflow instructions
+- Parameter tuning recommendations
+- Troubleshooting common issues
+
 **[Face Recognition Tuning Notebook](../notebooks/face_recognition_tuning.ipynb)**
 - Interactive Jupyter notebook for model tuning
 - Train models with reference photos
@@ -129,6 +135,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [README.md](../README.md) | Getting started, installation, usage | All users |
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
+| [NOTEBOOK_GUIDE.md](NOTEBOOK_GUIDE.md) | Notebook usage guide | All users |
 | [Tuning Notebook](../notebooks/face_recognition_tuning.ipynb) | Model tuning and experiments | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
