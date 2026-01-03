@@ -9,7 +9,7 @@ import pytest
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from train_face_model import get_reference_photos, load_config  # noqa: E402
+from train_face_model import get_reference_photos, load_config, main  # noqa: E402
 
 
 class TestLoadConfig:
@@ -96,8 +96,8 @@ class TestTrainFaceModelIntegration:
     @patch("train_face_model.load_config")
     @patch("train_face_model.get_reference_photos")
     @patch("train_face_model.LocalFaceRecognitionProvider")
-    @patch("sys.exit")
-    def test_training_successful_encoding(self, mock_exit, mock_provider_class, mock_get_photos, mock_load_config):
+    @patch("builtins.print")
+    def test_training_successful_encoding(self, mock_print, mock_provider_class, mock_get_photos, mock_load_config):
         """Test successful face encoding generation."""
         # Mock config
         mock_load_config.return_value = {
@@ -117,19 +117,16 @@ class TestTrainFaceModelIntegration:
         mock_provider.load_reference_photos.return_value = 2  # 2 faces loaded
         mock_provider_class.return_value = mock_provider
 
-        with patch("builtins.print"):
-            from train_face_model import main
-
-            main()
+        # Should complete without raising SystemExit
+        main()
 
         mock_provider.load_reference_photos.assert_called_once_with(["photo1.jpg", "photo2.jpg"])
-        mock_exit.assert_not_called()
 
     @patch("train_face_model.load_config")
     @patch("train_face_model.get_reference_photos")
     @patch("train_face_model.LocalFaceRecognitionProvider")
-    @patch("sys.exit")
-    def test_training_no_reference_photos(self, mock_exit, mock_provider_class, mock_get_photos, mock_load_config):
+    @patch("builtins.print")
+    def test_training_no_reference_photos(self, mock_print, mock_provider_class, mock_get_photos, mock_load_config):
         """Test handling when no reference photos are found."""
         mock_load_config.return_value = {
             "face_recognition": {"reference_photos_dir": "./reference_photos"},
@@ -139,19 +136,19 @@ class TestTrainFaceModelIntegration:
         # No photos found
         mock_get_photos.return_value = []
 
-        with patch("builtins.print"):
-            from train_face_model import main
-
+        with pytest.raises(SystemExit) as exc_info:
             main()
 
-        mock_exit.assert_called_once_with(1)
+        assert exc_info.value.code == 1
         mock_provider_class.assert_not_called()
 
     @patch("train_face_model.load_config")
     @patch("train_face_model.get_reference_photos")
     @patch("train_face_model.LocalFaceRecognitionProvider")
-    @patch("sys.exit")
-    def test_training_provider_initialization_failure(self, mock_exit, mock_provider_class, mock_get_photos, mock_load_config):
+    @patch("builtins.print")
+    def test_training_provider_initialization_failure(
+        self, mock_print, mock_provider_class, mock_get_photos, mock_load_config
+    ):
         """Test handling of provider initialization failure."""
         mock_load_config.return_value = {
             "face_recognition": {"reference_photos_dir": "./reference_photos", "local": {"model": "hog"}},
@@ -163,19 +160,17 @@ class TestTrainFaceModelIntegration:
         # Mock provider initialization failure
         mock_provider_class.side_effect = ImportError("face_recognition not installed")
 
-        with patch("builtins.print"):
-            from train_face_model import main
-
+        with pytest.raises(SystemExit) as exc_info:
             main()
 
-        mock_exit.assert_called_once_with(1)
+        assert exc_info.value.code == 1
 
     @patch("train_face_model.load_config")
     @patch("train_face_model.get_reference_photos")
     @patch("train_face_model.LocalFaceRecognitionProvider")
-    @patch("sys.exit")
+    @patch("builtins.print")
     def test_training_configuration_validation_failure(
-        self, mock_exit, mock_provider_class, mock_get_photos, mock_load_config
+        self, mock_print, mock_provider_class, mock_get_photos, mock_load_config
     ):
         """Test handling of configuration validation failure."""
         mock_load_config.return_value = {
@@ -189,18 +184,16 @@ class TestTrainFaceModelIntegration:
         mock_provider.validate_configuration.return_value = (False, "Invalid configuration")
         mock_provider_class.return_value = mock_provider
 
-        with patch("builtins.print"):
-            from train_face_model import main
-
+        with pytest.raises(SystemExit) as exc_info:
             main()
 
-        mock_exit.assert_called_once_with(1)
+        assert exc_info.value.code == 1
 
     @patch("train_face_model.load_config")
     @patch("train_face_model.get_reference_photos")
     @patch("train_face_model.LocalFaceRecognitionProvider")
-    @patch("sys.exit")
-    def test_training_load_reference_photos_failure(self, mock_exit, mock_provider_class, mock_get_photos, mock_load_config):
+    @patch("builtins.print")
+    def test_training_load_reference_photos_failure(self, mock_print, mock_provider_class, mock_get_photos, mock_load_config):
         """Test handling of failure during reference photo loading."""
         mock_load_config.return_value = {
             "face_recognition": {"reference_photos_dir": "./reference_photos", "local": {"model": "hog"}},
@@ -214,12 +207,10 @@ class TestTrainFaceModelIntegration:
         mock_provider.load_reference_photos.side_effect = Exception("Corrupted image file")
         mock_provider_class.return_value = mock_provider
 
-        with patch("builtins.print"):
-            from train_face_model import main
-
+        with pytest.raises(SystemExit) as exc_info:
             main()
 
-        mock_exit.assert_called_once_with(1)
+        assert exc_info.value.code == 1
 
 
 if __name__ == "__main__":
