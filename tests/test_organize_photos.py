@@ -153,21 +153,27 @@ class TestProcessImages:
         assert mock_logger.info.call_count >= 15  # At least one call per file plus summary
 
     def test_process_images_non_verbose_logging(self, mock_dbx_client, mock_provider, mock_logger):
-        """Test non-verbose logging only logs every 10th file."""
-        # Mock multiple files
+        """Test non-verbose logging logs progress less frequently than verbose mode."""
+        # Mock multiple files - make them NOT match so we only see progress logs
         image_files = []
         for i in range(25):
             mock_file = MagicMock()
             mock_file.path_display = f"/Photos/test{i}.jpg"
             image_files.append(mock_file)
 
+        # No matches - so we only count progress logging
+        mock_provider.find_matches_in_image.return_value = ([], 0)
+
         matches, processed, errors = process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 25
-        # Should log every 10th file (files 0, 9, 19, etc.) plus summary
-        # Exact count depends on implementation, but should be less than verbose mode
+        # In non-verbose mode, progress is logged every 10th file (files 10, 20)
+        # Plus 3 header lines = 5 info calls, much less than 25 files
+        # Verify that "Processing X/25" appears only for files 10 and 20
+        progress_calls = [call for call in mock_logger.info.call_args_list if "Processing" in str(call) and "/" in str(call)]
+        assert len(progress_calls) == 2  # Only files 10 and 20
 
 
 class TestPerformOperations:
@@ -187,20 +193,23 @@ class TestPerformOperations:
         return Mock()
 
     def test_perform_operations_skips_duplicates(self, mock_dbx_client, mock_logger):
-        """Test that duplicate filenames are detected and skipped."""
+        """Test that duplicate filenames from different folders are detected and skipped."""
+        # Two files with the SAME filename but in different source folders
         matches = [
-            {"file_path": "/Photos/test1.jpg", "num_matches": 1, "total_faces": 1, "matches": []},
-            {"file_path": "/Photos/test2.jpg", "num_matches": 1, "total_faces": 1, "matches": []},
+            {"file_path": "/Photos/folder1/photo.jpg", "num_matches": 1, "total_faces": 1, "matches": []},
+            {"file_path": "/Photos/folder2/photo.jpg", "num_matches": 1, "total_faces": 1, "matches": []},
         ]
         destination_folder = "/Matches"
 
-        # Mock copy_file to simulate duplicate handling
         mock_dbx_client.copy_file.return_value = True
 
         perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
 
-        # Should call copy_file twice (once per match)
-        assert mock_dbx_client.copy_file.call_count == 2
+        # Should only call copy_file once (second file has duplicate filename)
+        assert mock_dbx_client.copy_file.call_count == 1
+        mock_dbx_client.copy_file.assert_called_once_with("/Photos/folder1/photo.jpg", "/Matches/photo.jpg")
+        # Should log the skipped duplicate
+        mock_logger.info.assert_any_call("⊘ Skipped (duplicate filename): /Photos/folder2/photo.jpg")
 
     def test_perform_operations_dry_run_mode(self, mock_dbx_client, mock_logger):
         """Test that dry-run mode doesn't perform actual operations."""
