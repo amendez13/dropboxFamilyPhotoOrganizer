@@ -23,6 +23,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any, Dict
 
 import yaml
 
@@ -33,7 +34,7 @@ sys.path.insert(0, str(project_root))
 from scripts.auth import OAuthManager, TokenStorage  # noqa: E402
 
 
-def setup_logging(verbose: bool = False):
+def setup_logging(verbose: bool = False) -> None:
     """Configure logging."""
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
@@ -43,11 +44,12 @@ def setup_logging(verbose: bool = False):
     )
 
 
-def load_config(config_path: Path) -> dict:
+def load_config(config_path: Path) -> Dict[str, Any]:
     """Load configuration from YAML file."""
     try:
         with open(config_path) as f:
-            return yaml.safe_load(f)
+            config: Dict[str, Any] = yaml.safe_load(f)
+            return config
     except FileNotFoundError:
         print(f"Error: Configuration file not found: {config_path}")
         print("\nPlease copy config/config.example.yaml to config/config.yaml")
@@ -58,7 +60,7 @@ def load_config(config_path: Path) -> dict:
         sys.exit(1)
 
 
-def save_tokens_to_config(config_path: Path, tokens: dict):
+def save_tokens_to_config(config_path: Path, tokens: Dict[str, str]) -> None:
     """
     Save tokens to config file (fallback when keyring is not available).
 
@@ -91,7 +93,7 @@ def save_tokens_to_config(config_path: Path, tokens: dict):
         print(f"\ndropbox:\n  refresh_token: \"{tokens['refresh_token']}\"")
 
 
-def main():
+def main() -> None:
     """Main authorization flow."""
     parser = argparse.ArgumentParser(description="Authorize Dropbox Photo Organizer with OAuth 2.0")
     parser.add_argument(

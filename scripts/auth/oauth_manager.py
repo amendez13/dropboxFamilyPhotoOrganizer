@@ -6,6 +6,7 @@ Handles authorization flow with PKCE and refresh token management.
 import json
 import logging
 import time
+from types import ModuleType
 from typing import Dict, Optional
 
 from dropbox import DropboxOAuth2FlowNoRedirect
@@ -50,7 +51,7 @@ class OAuthManager:
             # Note: In production, this should be persisted securely
             self._auth_flow = auth_flow
 
-            return authorize_url
+            return str(authorize_url)
 
         except Exception as e:
             self.logger.error(f"Failed to start authorization flow: {e}")
@@ -194,6 +195,8 @@ class TokenStorage:
         self.logger = logging.getLogger(__name__)
 
         # Try to import keyring, but don't fail if not available
+        self.keyring: Optional[ModuleType] = None
+        self.keyring_available: bool = False
         try:
             import keyring
 
@@ -201,8 +204,6 @@ class TokenStorage:
             self.keyring_available = True
             self.logger.debug("Keyring available for secure token storage")
         except ImportError:
-            self.keyring = None
-            self.keyring_available = False
             self.logger.warning(
                 "Keyring not available. Tokens will be stored in config file. "
                 "Install keyring package for secure storage: pip install keyring"
@@ -220,7 +221,7 @@ class TokenStorage:
             True if successful, False otherwise
         """
         try:
-            if self.keyring_available:
+            if self.keyring_available and self.keyring is not None:
                 # Store tokens in system keyring
                 token_data = json.dumps(tokens)
                 self.keyring.set_password(self.service_name, username, token_data)
@@ -248,10 +249,10 @@ class TokenStorage:
             Dictionary containing tokens, or None if not found
         """
         try:
-            if self.keyring_available:
+            if self.keyring_available and self.keyring is not None:
                 token_data = self.keyring.get_password(self.service_name, username)
                 if token_data:
-                    tokens = json.loads(token_data)
+                    tokens: Dict[str, str] = json.loads(token_data)
                     self.logger.debug(f"Tokens loaded for user: {username}")
                     return tokens
                 else:
@@ -276,7 +277,7 @@ class TokenStorage:
             True if successful, False otherwise
         """
         try:
-            if self.keyring_available:
+            if self.keyring_available and self.keyring is not None:
                 self.keyring.delete_password(self.service_name, username)
                 self.logger.info(f"Tokens deleted for user: {username}")
                 return True

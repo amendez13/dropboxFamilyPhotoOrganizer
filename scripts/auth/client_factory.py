@@ -4,7 +4,7 @@ Handles both OAuth 2.0 and legacy access token authentication.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from scripts.auth.oauth_manager import TokenStorage
 from scripts.dropbox_client import DropboxClient
@@ -13,7 +13,7 @@ from scripts.dropbox_client import DropboxClient
 class DropboxClientFactory:
     """Factory for creating authenticated DropboxClient instances."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize factory with configuration.
 
@@ -51,8 +51,10 @@ class DropboxClientFactory:
                     raise ValueError("Invalid refresh token format")
 
                 # Create token refresh callback
-                def token_refresh_callback(access_token: str, expires_at: str):
+                def token_refresh_callback(access_token: str, expires_at: str) -> None:
                     """Callback to save refreshed tokens."""
+                    # Suppress unused argument warnings - parameters required by callback signature
+                    _ = access_token, expires_at
                     self.logger.info("Access token refreshed")
                     # Could save to keyring here if needed for manual access
 
@@ -81,7 +83,7 @@ class DropboxClientFactory:
             "2. Add 'access_token' to config/config.yaml (legacy, not recommended)"
         )
 
-    def _get_refresh_token(self, dropbox_config: dict, token_storage_mode: str) -> Optional[str]:
+    def _get_refresh_token(self, dropbox_config: Dict[str, Any], token_storage_mode: str) -> Optional[str]:
         """
         Get refresh token from configured storage.
 
@@ -96,9 +98,9 @@ class DropboxClientFactory:
         config_refresh_token = dropbox_config.get("refresh_token")
 
         if token_storage_mode == "config":  # nosec B105 - storage mode, not password
-            if config_refresh_token:
+            if config_refresh_token is not None:
                 self.logger.info("Using refresh token from config file")
-                return config_refresh_token
+                return str(config_refresh_token)
             else:
                 self.logger.warning("token_storage set to 'config' but no refresh_token in config")
                 return None
@@ -117,8 +119,8 @@ class DropboxClientFactory:
             self.logger.warning("Keyring not available, install with: pip install keyring")
 
         # Fallback to config file if keyring fails
-        if config_refresh_token:
+        if config_refresh_token is not None:
             self.logger.info("Using refresh token from config file (keyring fallback)")
-            return config_refresh_token
+            return str(config_refresh_token)
 
         return None

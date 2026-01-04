@@ -17,6 +17,7 @@ import glob
 import logging
 import os
 import sys
+from typing import Any, Dict, List
 
 # Add parent directory to path FIRST before other imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def load_config():
+def load_config() -> Dict[str, Any]:
     """Load configuration from config.yaml."""
     config_path = "config/config.yaml"
     if not os.path.exists(config_path):
@@ -39,12 +40,12 @@ def load_config():
         sys.exit(1)
 
     with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
+        config: Dict[str, Any] = yaml.safe_load(f)
 
     return config
 
 
-def get_reference_photos(reference_dir, image_extensions):
+def get_reference_photos(reference_dir: str, image_extensions: List[str]) -> List[str]:
     """Get list of reference photos from directory."""
     if not os.path.exists(reference_dir):
         logger.error(f"Reference photos directory not found: {reference_dir}")
@@ -69,7 +70,7 @@ def get_reference_photos(reference_dir, image_extensions):
     return sorted(photos)
 
 
-def main():
+def main() -> None:
     """Main training function."""
     print("=" * 70)
     print("Face Recognition Model Training")

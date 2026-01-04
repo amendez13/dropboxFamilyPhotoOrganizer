@@ -6,6 +6,7 @@ Supports both OAuth 2.0 and legacy access token authentication.
 import logging
 import os
 import sys
+from typing import Any, Dict, List
 
 import yaml
 
@@ -13,13 +14,15 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.auth import DropboxClientFactory  # noqa: E402
+from scripts.dropbox_client import DropboxClient  # noqa: E402
 
 
-def load_config(config_path: str = "config/config.yaml") -> dict:
+def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
     """Load configuration from YAML file."""
     try:
         with open(config_path, "r") as f:
-            return yaml.safe_load(f)
+            config: Dict[str, Any] = yaml.safe_load(f)
+            return config
     except FileNotFoundError:
         print(f"Error: Configuration file '{config_path}' not found.")
         print("Please copy config/config.example.yaml to config/config.yaml and fill in your settings.")
@@ -29,7 +32,7 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
         sys.exit(1)
 
 
-def _test_connection(client) -> bool:
+def _test_connection(client: DropboxClient) -> bool:
     """Test Dropbox connection."""
     print("\n[Test 1] Verifying Dropbox connection...")
     if client.verify_connection():
@@ -41,7 +44,7 @@ def _test_connection(client) -> bool:
         return False
 
 
-def _test_file_listing(client, source_folder: str, image_extensions: list) -> int:
+def _test_file_listing(client: DropboxClient, source_folder: str, image_extensions: List[str]) -> int:
     """Test file listing in source folder."""
     print(f"\n[Test 2] Listing files in source folder: {source_folder}")
     file_count = 0
@@ -65,7 +68,7 @@ def _test_file_listing(client, source_folder: str, image_extensions: list) -> in
     return file_count
 
 
-def _test_thumbnail(client, source_folder: str, image_extensions: list, config: dict):
+def _test_thumbnail(client: DropboxClient, source_folder: str, image_extensions: List[str], config: Dict[str, Any]) -> None:
     """Test thumbnail download."""
     print("\n[Test 3] Testing thumbnail download...")
     try:
@@ -86,7 +89,7 @@ def _test_thumbnail(client, source_folder: str, image_extensions: list, config: 
         print("  Note: Cannot test thumbnails without image files")
 
 
-def main():
+def main() -> None:
     """Test Dropbox connection and list files."""
     # Setup logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

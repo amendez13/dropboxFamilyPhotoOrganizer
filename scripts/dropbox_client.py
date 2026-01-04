@@ -6,7 +6,7 @@ Supports both legacy access tokens and OAuth 2.0 with automatic token refresh.
 
 import logging
 import os
-from typing import Generator, List, Optional
+from typing import Callable, Generator, List, Optional
 
 import dropbox
 from dropbox.exceptions import ApiError, AuthError
@@ -24,7 +24,7 @@ class DropboxClient:
         refresh_token: Optional[str] = None,
         app_key: Optional[str] = None,
         app_secret: Optional[str] = None,
-        token_refresh_callback: Optional[callable] = None,
+        token_refresh_callback: Optional[Callable[[str, str], None]] = None,
     ):
         """
         Initialize Dropbox client.
@@ -58,6 +58,11 @@ class DropboxClient:
         self.app_key = app_key
         self.app_secret = app_secret
         self.token_refresh_callback = token_refresh_callback
+
+        # Initialize attributes with type annotations
+        self.auth_mode: str
+        self.access_token: Optional[str]
+        self.refresh_token: Optional[str]
 
         # Initialize Dropbox client
         if refresh_token:
@@ -135,7 +140,7 @@ class DropboxClient:
             self.logger.info(f"Connected to Dropbox account: {account.email}")
 
             # If in OAuth mode and we have a callback, notify about token refresh
-            if self.auth_mode == "oauth" and self.token_refresh_callback:
+            if self.auth_mode == "oauth" and self.token_refresh_callback is not None:
                 current_token = self.get_current_access_token()
                 if current_token and current_token != self.access_token:
                     # Token was refreshed
@@ -293,7 +298,7 @@ class DropboxClient:
 
             metadata, response = self.dbx.files_get_thumbnail(dropbox_path, format=format_enum, size=size_enum)
 
-            return response.content
+            return bytes(response.content)
 
         except ApiError as e:
             self.logger.warning(f"Could not get thumbnail for '{dropbox_path}': {e}")
@@ -311,7 +316,7 @@ class DropboxClient:
         """
         try:
             metadata, response = self.dbx.files_download(dropbox_path)
-            return response.content
+            return bytes(response.content)
 
         except ApiError as e:
             self.logger.warning(f"Could not download file '{dropbox_path}': {e}")

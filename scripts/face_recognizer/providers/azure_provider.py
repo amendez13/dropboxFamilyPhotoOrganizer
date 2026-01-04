@@ -6,7 +6,7 @@ Uses Azure Cognitive Services Face API for face detection and identification.
 import logging
 import os
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -50,7 +50,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
     - confidence_threshold: Minimum confidence (default: 0.5)
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict[str, Any]):
         """Initialize Azure Face API provider."""
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         except Exception as e:
             return False, f"Azure Face API error: {str(e)}"
 
-    def _create_or_get_person_group(self):
+    def _create_or_get_person_group(self) -> None:
         """Create person group if it doesn't exist."""
         try:
             self.client.person_group.get(self.person_group_id)
@@ -105,7 +105,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             )
             self.logger.info(f"Created new person group: {self.person_group_id}")
 
-    def _create_or_get_person(self, name: str = "Target Person"):
+    def _create_or_get_person(self, name: str = "Target Person") -> None:
         """Create or get person in the person group."""
         try:
             # List existing persons
@@ -148,7 +148,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             self.logger.error(f"Error adding reference photo {photo_path}: {e}")
             return False
 
-    def _train_person_group(self):
+    def _train_person_group(self) -> None:
         """Train the person group and wait for completion."""
         self.logger.info("Training Azure Face model...")
         self.client.person_group.train(self.person_group_id)

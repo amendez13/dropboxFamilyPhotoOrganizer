@@ -4,21 +4,30 @@ Provides a factory pattern to easily instantiate different face recognition prov
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider
 from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
+# Type alias for provider classes
+ProviderClass = Optional[Type[BaseFaceRecognitionProvider]]
+
 # Optional providers (will be None if dependencies not installed)
+_AWSProvider: ProviderClass = None
 try:
     from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
-except ImportError:
-    AWSFaceRecognitionProvider = None
 
+    _AWSProvider = AWSFaceRecognitionProvider
+except ImportError:
+    pass
+
+_AzureProvider: ProviderClass = None
 try:
     from scripts.face_recognizer.providers.azure_provider import AzureFaceRecognitionProvider
+
+    _AzureProvider = AzureFaceRecognitionProvider
 except ImportError:
-    AzureFaceRecognitionProvider = None
+    pass
 
 
 class FaceRecognitionFactory:
@@ -31,14 +40,14 @@ class FaceRecognitionFactory:
     - 'azure': Azure Face API
     """
 
-    PROVIDERS = {
+    PROVIDERS: Dict[str, ProviderClass] = {
         "local": LocalFaceRecognitionProvider,
-        "aws": AWSFaceRecognitionProvider,
-        "azure": AzureFaceRecognitionProvider,
+        "aws": _AWSProvider,
+        "azure": _AzureProvider,
     }
 
     @staticmethod
-    def create_provider(provider_name: str, config: Dict) -> BaseFaceRecognitionProvider:
+    def create_provider(provider_name: str, config: Dict[str, Any]) -> BaseFaceRecognitionProvider:
         """
         Create a face recognition provider instance.
 
@@ -97,7 +106,7 @@ class FaceRecognitionFactory:
 
 
 # Convenience function
-def get_provider(provider_name: str, config: Dict) -> BaseFaceRecognitionProvider:
+def get_provider(provider_name: str, config: Dict[str, Any]) -> BaseFaceRecognitionProvider:
     """
     Convenience function to create a provider.
 
