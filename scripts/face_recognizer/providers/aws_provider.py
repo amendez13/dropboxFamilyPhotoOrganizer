@@ -5,7 +5,7 @@ Uses AWS Rekognition for face detection and comparison.
 
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -47,7 +47,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
     - similarity_threshold: Minimum similarity percentage (default: 80)
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict[str, Any]):
         """Initialize AWS Rekognition provider."""
         super().__init__(config)
         self.logger = logging.getLogger(__name__)

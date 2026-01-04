@@ -4,19 +4,23 @@ Scans Dropbox directories for photos containing a specific person and copies/mov
 """
 
 import argparse
+import glob
 import json
 import logging
 import os
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
+from dropbox.files import FileMetadata
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts.dropbox_client import DropboxClient  # noqa: E402
 from scripts.face_recognizer import get_provider  # noqa: E402
+from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider  # noqa: E402
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -36,7 +40,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-def load_config(config_path: str = "../config/config.yaml") -> dict:
+def load_config(config_path: str = "../config/config.yaml") -> Dict[str, Any]:
     """
     Load configuration from YAML file.
 
@@ -54,12 +58,14 @@ def load_config(config_path: str = "../config/config.yaml") -> dict:
         full_path = os.path.abspath(os.path.join(script_dir, config_path))
 
     with open(full_path, "r") as f:
-        config = yaml.safe_load(f)
+        config: Dict[str, Any] = yaml.safe_load(f)
 
     return config
 
 
-def safe_organize(dbx, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None) -> dict:
+def safe_organize(
+    dbx: DropboxClient, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Safely organize a file by copying or moving it, with audit logging.
 
@@ -110,7 +116,9 @@ def safe_organize(dbx, source_path: str, dest_path: str, operation: str = "copy"
     return log_entry
 
 
-def _download_image(dbx_client, file_path, face_config, use_full_size):
+def _download_image(
+    dbx_client: DropboxClient, file_path: str, face_config: Dict[str, Any], use_full_size: bool
+) -> Tuple[Optional[bytes], Optional[str]]:
     """
     Download image data from Dropbox.
 
@@ -137,7 +145,16 @@ def _download_image(dbx_client, file_path, face_config, use_full_size):
     return image_data, None
 
 
-def process_images(image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger):
+def process_images(
+    image_files: List[FileMetadata],
+    dbx_client: DropboxClient,
+    provider: BaseFaceRecognitionProvider,
+    face_config: Dict[str, Any],
+    use_full_size: bool,
+    tolerance: float,
+    verbose_processing: bool,
+    logger: logging.Logger,
+) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     Process images from Dropbox and find face matches.
 
@@ -209,7 +226,15 @@ def process_images(image_files, dbx_client, provider, face_config, use_full_size
     return matches, processed, errors
 
 
-def perform_operations(matches, destination_folder, dbx_client, operation, log_file, dry_run, logger):
+def perform_operations(
+    matches: List[Dict[str, Any]],
+    destination_folder: str,
+    dbx_client: DropboxClient,
+    operation: str,
+    log_file: Optional[str],
+    dry_run: bool,
+    logger: logging.Logger,
+) -> None:
     """
     Perform copy/move operations on files that matched face recognition.
 
@@ -281,7 +306,7 @@ def perform_operations(matches, destination_folder, dbx_client, operation, log_f
         logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
 
 
-def _get_reference_photos(reference_photos_dir, image_extensions):
+def _get_reference_photos(reference_photos_dir: str, image_extensions: List[str]) -> List[str]:
     """
     Find reference photos in the specified directory.
 
@@ -292,9 +317,7 @@ def _get_reference_photos(reference_photos_dir, image_extensions):
     Returns:
         List of paths to reference photo files, excluding system files.
     """
-    import glob
-
-    reference_photos = []
+    reference_photos: List[str] = []
     for ext in image_extensions:
         pattern = f"{reference_photos_dir}/*{ext}"
         reference_photos.extend(glob.glob(pattern))
@@ -305,7 +328,7 @@ def _get_reference_photos(reference_photos_dir, image_extensions):
     return reference_photos
 
 
-def main():
+def main() -> int:
     """Main entry point for the photo organizer."""
     parser = argparse.ArgumentParser(description="Organize Dropbox photos based on face recognition")
     parser.add_argument(

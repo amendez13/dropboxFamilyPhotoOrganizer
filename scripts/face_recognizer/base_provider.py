@@ -5,7 +5,7 @@ Defines the interface that all face recognition providers must implement.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class BaseFaceRecognitionProvider(ABC):
     All providers (local, AWS, Azure, etc.) must implement these methods.
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize the provider with configuration.
 

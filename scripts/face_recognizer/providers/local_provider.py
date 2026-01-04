@@ -5,7 +5,7 @@ Runs entirely offline without external API calls.
 
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -42,7 +42,7 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
     - Limited to CPU processing (no GPU acceleration by default)
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize local face recognition provider.
 
@@ -143,14 +143,16 @@ class LocalFaceRecognitionProvider(BaseFaceRecognitionProvider):
         """
         try:
             # Convert bytes to image
-            image = Image.open(io.BytesIO(image_data))
+            opened_image = Image.open(io.BytesIO(image_data))
 
             # Convert to RGB if necessary
-            if image.mode != "RGB":
-                image = image.convert("RGB")
+            if opened_image.mode != "RGB":
+                rgb_image = opened_image.convert("RGB")
+            else:
+                rgb_image = opened_image
 
             # Convert to numpy array
-            image_array = np.array(image)
+            image_array = np.array(rgb_image)
 
             # Find faces
             face_locations = face_recognition.face_locations(image_array, model=self.model)
