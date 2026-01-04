@@ -21,23 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.dropbox_client import DropboxClient  # noqa: E402
 from scripts.face_recognizer import get_provider  # noqa: E402
 from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider  # noqa: E402
-
-
-def setup_logging(verbose: bool = False) -> logging.Logger:
-    """
-    Configure logging for the application.
-
-    Args:
-        verbose: If True, set log level to DEBUG, otherwise INFO
-
-    Returns:
-        Configured logger instance
-    """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    return logging.getLogger(__name__)
+from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
 
 def load_config(config_path: str = "../config/config.yaml") -> Dict[str, Any]:
@@ -363,7 +347,8 @@ def main() -> int:
     args = parser.parse_args()
 
     # Setup logging
-    logger = setup_logging(args.verbose)
+    setup_logging(args.verbose)
+    logger = get_logger(__name__)
 
     try:
         # Load configuration

@@ -20,7 +20,6 @@ For more information, see docs/DROPBOX_SETUP.md
 """
 
 import argparse
-import logging
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -32,16 +31,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from scripts.auth import OAuthManager, TokenStorage  # noqa: E402
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
 
 def load_config(config_path: Path) -> Dict[str, Any]:
@@ -111,14 +101,16 @@ def main() -> None:
 
     args = parser.parse_args()
     setup_logging(args.verbose)
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     print("=" * 70)
     print("Dropbox Photo Organizer - OAuth 2.0 Authorization")
     print("=" * 70)
 
     # Load configuration
+    logger.info("Loading configuration...")
     config = load_config(args.config)
+    logger.info("✓ Configuration loaded successfully")
 
     # Get app credentials
     dropbox_config = config.get("dropbox", {})
@@ -133,15 +125,19 @@ def main() -> None:
         sys.exit(1)
 
     # Initialize OAuth manager
+    logger.info("Initializing OAuth manager...")
     oauth_manager = OAuthManager(app_key, app_secret)
+    logger.info("✓ OAuth manager initialized")
 
     # Start authorization flow
+    logger.info("Starting OAuth 2.0 authorization flow with PKCE for enhanced security")
     print("\nStarting OAuth 2.0 authorization flow...")
     print("\nThis will use PKCE (Proof Key for Code Exchange) for enhanced security.")
     print("You will receive a refresh token that can be used indefinitely.")
 
     try:
         authorize_url = oauth_manager.start_authorization_flow()
+        logger.info("✓ Authorization URL generated successfully")
 
         print("\n" + "=" * 70)
         print("STEP 1: Authorize the application")
@@ -162,8 +158,10 @@ def main() -> None:
             sys.exit(1)
 
         # Complete authorization flow
+        logger.info("Exchanging authorization code for tokens...")
         print("\nExchanging authorization code for tokens...")
         tokens = oauth_manager.complete_authorization_flow(auth_code)
+        logger.info("✓ Tokens obtained successfully")
 
         print("\n" + "=" * 70)
         print("STEP 3: Save tokens securely")
@@ -174,21 +172,26 @@ def main() -> None:
 
         if not args.force_config_storage and token_storage.keyring_available:
             # Use keyring for secure storage
+            logger.info("Saving tokens to system keyring...")
             print("\nSaving tokens to system keyring (secure storage)...")
             success = token_storage.save_tokens(tokens)
 
             if success:
+                logger.info("✓ Tokens saved successfully to system keyring")
                 print("✓ Tokens saved successfully to system keyring!")
                 print("\nYour refresh token is now stored securely.")
                 print("The application will automatically refresh access tokens as needed.")
             else:
+                logger.warning("Failed to save tokens to keyring, falling back to config file")
                 print("\nFailed to save tokens to keyring. Falling back to config file...")
                 save_tokens_to_config(args.config, tokens)
         else:
             # Fallback to config file
             if args.force_config_storage:
+                logger.info("Forced config file storage (user requested)")
                 print("\nForced config file storage (less secure)...")
             else:
+                logger.info("Keyring not available, saving to config file")
                 print("\nKeyring not available. Saving to config file (less secure)...")
 
             save_tokens_to_config(args.config, tokens)

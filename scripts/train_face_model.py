@@ -14,7 +14,6 @@ Usage:
 """
 
 import glob
-import logging
 import os
 import sys
 from typing import Any, Dict, List
@@ -25,10 +24,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import yaml  # noqa: E402
 
 from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider  # noqa: E402
+from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
+# Setup logging
+setup_logging()
+logger = get_logger(__name__)
 
 
 def load_config() -> Dict[str, Any]:
@@ -152,6 +152,7 @@ def main() -> None:
         logger.error(f"Configuration validation failed: {error_msg}")
         sys.exit(1)
 
+    logger.info("✓ Configuration validation successful")
     print("✓ Configuration valid")
     print()
 
@@ -162,7 +163,11 @@ def main() -> None:
     print()
 
     try:
+        logger.info("Loading and processing reference photos...")
         num_faces = provider.load_reference_photos(reference_photos)
+        logger.info(
+            f"✓ Training completed successfully - loaded {num_faces} face encodings from {len(reference_photos)} photos"
+        )
         print()
         print("=" * 70)
         print("Training Complete!")
