@@ -212,6 +212,46 @@ jobs:
       env:
         PYTHONUNBUFFERED: 1
 
+  update-pr-branch:
+    name: Update PR Branch with Main
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+
+    - name: Configure Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Update branch with latest main
+      run: |
+        # Fetch all branches
+        git fetch origin main
+
+        # Check if there are any merge conflicts
+        if git merge-base --is-ancestor origin/main HEAD; then
+          echo "✅ PR branch is already up to date with main"
+          exit 0
+        fi
+
+        # Attempt to merge main into the current branch
+        if git merge origin/main --no-edit; then
+          echo "✅ Successfully merged latest changes from main"
+          # Push the updated branch back to the PR
+          git push origin HEAD:${{ github.head_ref }}
+          echo "✅ Pushed updated branch to PR"
+        else
+          echo "⚠️  Merge conflicts detected. Manual resolution required."
+          git merge --abort
+          exit 1
+        fi
+
   build-status:
     name: CI Status Check
     runs-on: ubuntu-latest
