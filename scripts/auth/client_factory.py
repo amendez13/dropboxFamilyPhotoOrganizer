@@ -99,8 +99,11 @@ class DropboxClientFactory:
 
         if token_storage_mode == "config":  # nosec B105 - storage mode, not password
             if config_refresh_token is not None:
+                if not isinstance(config_refresh_token, str):
+                    self.logger.error("Invalid refresh token type in config: expected string")
+                    raise ValueError("Invalid refresh token format")
                 self.logger.info("Using refresh token from config file")
-                return str(config_refresh_token)
+                return config_refresh_token
             else:
                 self.logger.warning("token_storage set to 'config' but no refresh_token in config")
                 return None
@@ -120,7 +123,10 @@ class DropboxClientFactory:
 
         # Fallback to config file if keyring fails
         if config_refresh_token is not None:
+            if not isinstance(config_refresh_token, str):
+                self.logger.error("Invalid refresh token type in config: expected string")
+                raise ValueError("Invalid refresh token format")
             self.logger.info("Using refresh token from config file (keyring fallback)")
-            return str(config_refresh_token)
+            return config_refresh_token
 
         return None
