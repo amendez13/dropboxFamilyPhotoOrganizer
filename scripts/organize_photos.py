@@ -63,6 +63,25 @@ def load_config(config_path: str = "../config/config.yaml") -> Dict[str, Any]:
     return config
 
 
+def _sanitize_path_for_logging(path: str) -> str:
+    """
+    Sanitize file paths for safe logging by removing control characters.
+
+    This prevents log injection attacks where malicious file paths containing
+    newline characters or other control characters could break the JSON-per-line
+    log format or inject false log entries.
+
+    Args:
+        path: The file path to sanitize
+
+    Returns:
+        Sanitized path with control characters removed
+    """
+    # Remove control characters (ASCII 0-31 and 127-159)
+    # Keep printable characters (32-126), Unicode characters (160+), and path separators
+    return "".join(char for char in path if (ord(char) >= 32 and ord(char) < 127) or ord(char) >= 160 or char in "/\\")
+
+
 def safe_organize(
     dbx: DropboxClient, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -81,8 +100,8 @@ def safe_organize(
     """
     log_entry = {
         "timestamp": datetime.now().isoformat(),
-        "source": source_path,
-        "destination": dest_path,
+        "source": _sanitize_path_for_logging(source_path),
+        "destination": _sanitize_path_for_logging(dest_path),
         "operation": operation,
         "success": False,
     }
