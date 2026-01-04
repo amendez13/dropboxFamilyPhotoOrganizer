@@ -139,6 +139,58 @@ processing:
 - **log_operations**: If true, logs all operations to `operations.log`
 - **dry_run**: If true, lists matches without copying/moving files
 
+## Logging
+
+The application provides comprehensive logging for monitoring, debugging, and audit trails. All scripts use a centralized logging system that writes to both console and rotating log files.
+
+### Log Files
+
+- **Location**: `logs/photo_organizer.log` (created automatically)
+- **Rotation**: Files are rotated at 10MB with 5 backup files kept
+- **Format**: `timestamp - module - level - message`
+
+### Verbose Logging
+
+Use the `--verbose` flag to enable debug-level logging:
+
+```bash
+# Enable verbose logging for detailed debug information
+python scripts/organize_photos.py --verbose
+
+# All scripts support the --verbose flag
+python scripts/train_face_model.py --verbose
+python scripts/test_dropbox_connection.py --verbose
+```
+
+### Log Levels
+
+- **INFO** (default): General operation information and progress
+- **DEBUG** (verbose): Detailed debugging information including API calls, file processing details, and internal state
+
+### Custom Log File Location
+
+You can specify a custom log file location:
+
+```bash
+# Use a custom log file path
+python scripts/organize_photos.py --log-file /path/to/custom.log
+```
+
+### Log File Management
+
+- Log files are automatically created in the `logs/` directory
+- Old log files are rotated: `photo_organizer.log.1`, `photo_organizer.log.2`, etc.
+- Maximum 5 backup files are kept (configurable in code)
+- Log files include timestamps, module names, and log levels for easy filtering
+
+### Audit Logging
+
+In addition to application logs, file operations are also logged to `operations.log` (JSON format) for audit purposes:
+
+```json
+{"timestamp": "2024-01-04T23:59:42.123456", "source": "/Photos/Family/photo.jpg", "destination": "/Photos/Person/photo.jpg", "operation": "copy", "success": true}
+```
+
 ## Project Structure
 
 ```

@@ -3,7 +3,6 @@ Test script to verify Dropbox API connection and configuration.
 Supports both OAuth 2.0 and legacy access token authentication.
 """
 
-import logging
 import os
 import sys
 from typing import Any, Dict, List
@@ -15,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.auth import DropboxClientFactory  # noqa: E402
 from scripts.dropbox_client import DropboxClient  # noqa: E402
+from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
 
 def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
@@ -92,8 +92,8 @@ def _test_thumbnail(client: DropboxClient, source_folder: str, image_extensions:
 def main() -> None:
     """Test Dropbox connection and list files."""
     # Setup logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    logger = logging.getLogger(__name__)
+    setup_logging()
+    logger = get_logger(__name__)
 
     print("=" * 60)
     print("Dropbox Connection Test")
