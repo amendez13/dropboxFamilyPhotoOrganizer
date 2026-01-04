@@ -34,7 +34,7 @@ repos:
     rev: v2.7.3
     hooks:
       - id: pip-audit
-        args: [--requirement, requirements.txt]
+        args: [--requirement, requirements.txt, --cache-dir, .pip-audit-cache]
 
   # Generic checks
   - repo: https://github.com/pre-commit/pre-commit-hooks

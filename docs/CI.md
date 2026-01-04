@@ -878,13 +878,15 @@ Comment on Dependabot PRs with these commands:
 **Changed:**
 - Security checks (bandit, pip-audit) are now blocking - builds fail on security issues
 - Migrated from deprecated `safety` to `pip-audit` for dependency vulnerability scanning
-- Updated `.pre-commit-config.yaml` to include `pip-audit` hook
+- Updated `.pre-commit-config.yaml` to include `pip-audit` hook with caching
 - Updated `requirements-dev.txt` to use `pip-audit` instead of `safety`
 
 **Added:**
 - `# nosec` comments to document false positives:
   - `scripts/auth/client_factory.py:98` - B105 false positive for config mode string
   - `scripts/auth/oauth_manager.py:43` - B106 false positive for OAuth token type
+- `.pip-audit-cache/` to `.gitignore` for pre-commit caching
+- Performance note in README about pip-audit hook timing
 
 **Removed:**
 - `|| true` bypass from bandit and safety commands in CI workflow

@@ -276,9 +276,12 @@ These hooks will automatically:
 - Format code with Black
 - Sort imports with isort
 - Check for linting errors
-- Scan for security issues
+- Scan for security issues (bandit)
+- Check for dependency vulnerabilities (pip-audit)
 - Validate YAML files
 - Prevent committing secrets
+
+**Note:** The `pip-audit` hook may take 10-30 seconds on first run as it queries vulnerability databases (subsequent runs use cache). For WIP commits, you can skip hooks with `git commit --no-verify`, but remember to run them before pushing.
 
 ### Running Tests Locally
 
