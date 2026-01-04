@@ -60,3 +60,10 @@ coverage.xml
 # Temporary files
 temp/
 tmp/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# Notebook test data (large image files)
+notebooks/data/test_photos/
