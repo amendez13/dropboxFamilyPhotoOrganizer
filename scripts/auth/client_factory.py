@@ -95,7 +95,7 @@ class DropboxClientFactory:
         # Check config file first (for token_storage: config mode)
         config_refresh_token = dropbox_config.get("refresh_token")
 
-        if token_storage_mode == "config":
+        if token_storage_mode == "config":  # nosec B105
             if config_refresh_token:
                 self.logger.info("Using refresh token from config file")
                 return config_refresh_token

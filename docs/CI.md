@@ -95,23 +95,25 @@ pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
 
 ### 3. Security Checks
 
-Scans for security vulnerabilities in code and dependencies.
+Scans for security vulnerabilities in code and dependencies. **Security checks are blocking** - builds will fail if vulnerabilities are found.
 
 **Tools Used:**
 - **bandit** - Security vulnerability scanner for Python code
-- **safety** - Checks for known security vulnerabilities in dependencies
+- **pip-audit** - Checks for known security vulnerabilities in dependencies (replaced deprecated `safety` tool)
 
 **Commands:**
 ```bash
-# Scan code for security issues
-bandit -r scripts/ -f json -o bandit-report.json
-bandit -r scripts/
+# Scan code for security issues (medium and higher severity)
+bandit -r scripts/ -ll
 
 # Check dependencies for known vulnerabilities
-safety check --json
+pip-audit --requirement requirements.txt
 ```
 
-**Note:** Security checks are currently non-blocking (continue-on-error: true) to allow development to proceed while vulnerabilities are being addressed.
+**Handling False Positives:**
+- Use `# nosec BXXX` inline comments to suppress false positives
+- Always include a brief justification in the comment
+- Example: `token_access_type="offline",  # nosec B106 - Request refresh token`
 
 ### 4. Configuration Validation
 
@@ -156,8 +158,7 @@ Final job that verifies all required checks passed.
 
 **Behavior:**
 - ✅ Passes if all dependent jobs succeed
-- ❌ Fails if any required job fails
-- ⚠️ Warns if security checks have issues (non-blocking)
+- ❌ Fails if any required job fails (including security checks)
 
 ## Configuration Files
 
@@ -243,7 +244,7 @@ Location: `requirements-dev.txt`
 
 **Security:**
 - bandit>=1.7.5
-- safety>=2.3.0
+- pip-audit>=2.7.0
 
 ## Running CI Checks Locally
 
@@ -294,11 +295,11 @@ pytest tests/test_basic.py -v
 ### Security Scans
 
 ```bash
-# Scan code for security issues
-bandit -r scripts/
+# Scan code for security issues (medium and higher severity)
+bandit -r scripts/ -ll
 
-# Check dependencies
-safety check
+# Check dependencies for known vulnerabilities
+pip-audit --requirement requirements.txt
 ```
 
 ### Validate Configuration
@@ -871,3 +872,20 @@ Comment on Dependabot PRs with these commands:
 - All Python code formatted with Black
 - All imports sorted with isort
 - README updated with Development section
+
+### 2026-01-04 - Make Security Checks Blocking
+
+**Changed:**
+- Security checks (bandit, pip-audit) are now blocking - builds fail on security issues
+- Migrated from deprecated `safety` to `pip-audit` for dependency vulnerability scanning
+- Updated `.pre-commit-config.yaml` to include `pip-audit` hook
+- Updated `requirements-dev.txt` to use `pip-audit` instead of `safety`
+
+**Added:**
+- `# nosec` comments to document false positives:
+  - `scripts/auth/client_factory.py:98` - B105 false positive for config mode string
+  - `scripts/auth/oauth_manager.py:43` - B106 false positive for OAuth token type
+
+**Removed:**
+- `|| true` bypass from bandit and safety commands in CI workflow
+- `continue-on-error: true` from security checks

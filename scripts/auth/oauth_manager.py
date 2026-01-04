@@ -40,7 +40,7 @@ class OAuthManager:
                 consumer_key=self.app_key,
                 consumer_secret=self.app_secret,
                 use_pkce=True,  # Use PKCE for enhanced security
-                token_access_type="offline",  # Request refresh token
+                token_access_type="offline",  # nosec B106 - Request refresh token
             )
 
             authorize_url = auth_flow.start()
