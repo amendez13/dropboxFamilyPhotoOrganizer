@@ -212,10 +212,13 @@ jobs:
       env:
         PYTHONUNBUFFERED: 1
 
-  update-pr-branch:
-    name: Update PR Branch with Main
+  rebase-pr-branch:
+    name: Rebase PR Branch onto Main
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Checkout PR branch
@@ -223,34 +226,61 @@ jobs:
       with:
         ref: ${{ github.head_ref }}
         fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Configure Git
       run: |
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Update branch with latest main
+    - name: Rebase onto latest main
+      id: rebase
       run: |
-        # Fetch all branches
+        # Fetch the latest main branch
         git fetch origin main
 
-        # Check if there are any merge conflicts
+        # Check if PR branch is already up to date with main
         if git merge-base --is-ancestor origin/main HEAD; then
+          echo "already_up_to_date=true" >> $GITHUB_OUTPUT
           echo "✅ PR branch is already up to date with main"
           exit 0
         fi
 
-        # Attempt to merge main into the current branch
-        if git merge origin/main --no-edit; then
-          echo "✅ Successfully merged latest changes from main"
-          # Push the updated branch back to the PR
-          git push origin HEAD:${{ github.head_ref }}
-          echo "✅ Pushed updated branch to PR"
+        echo "already_up_to_date=false" >> $GITHUB_OUTPUT
+
+        # Get current commit count for logging
+        COMMITS_BEHIND=$(git rev-list --count HEAD..origin/main)
+        echo "📊 PR branch is $COMMITS_BEHIND commit(s) behind main"
+
+        # Attempt rebase onto main
+        if git rebase origin/main; then
+          echo "rebase_success=true" >> $GITHUB_OUTPUT
+          echo "✅ Successfully rebased onto latest main"
         else
-          echo "⚠️  Merge conflicts detected. Manual resolution required."
-          git merge --abort
+          echo "rebase_success=false" >> $GITHUB_OUTPUT
+          echo "⚠️  Rebase conflicts detected. Manual resolution required."
+          git rebase --abort
           exit 1
         fi
+
+    - name: Force push rebased branch
+      if: steps.rebase.outputs.already_up_to_date != 'true' && steps.rebase.outputs.rebase_success == 'true'
+      run: |
+        # Force push is required after rebase since history is rewritten
+        git push --force-with-lease origin HEAD:${{ github.head_ref }}
+        echo "✅ Pushed rebased branch to PR"
+
+    - name: Add comment on conflict
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '⚠️ **Automatic rebase failed due to conflicts.**\n\nPlease manually rebase your branch onto `main`:\n```bash\ngit fetch origin main\ngit rebase origin/main\n# Resolve conflicts\ngit push --force-with-lease\n```'
+          })
 
   build-status:
     name: CI Status Check
