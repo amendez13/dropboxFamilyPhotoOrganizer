@@ -9,7 +9,85 @@ import pytest
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from organize_photos import perform_operations, process_images  # noqa: E402
+from organize_photos import _sanitize_path_for_logging, perform_operations, process_images  # noqa: E402
+
+
+class TestSanitizePathForLogging:
+    """Test _sanitize_path_for_logging function."""
+
+    def test_sanitizes_control_characters(self):
+        """Test that control characters are removed from paths."""
+        # Test various control characters
+        malicious_path = "/Photos/test\x00\x01\x02\x03.jpg"  # Null and other control chars
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        assert "\x00" not in result
+        assert "\x01" not in result
+
+    def test_sanitizes_newline_characters(self):
+        """Test that newline characters are removed (log injection prevention)."""
+        malicious_path = "/Photos/test\n.jpg"
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        assert "\n" not in result
+
+    def test_sanitizes_carriage_return(self):
+        """Test that carriage return characters are removed."""
+        malicious_path = "/Photos/test\r.jpg"
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        assert "\r" not in result
+
+    def test_sanitizes_tab_characters(self):
+        """Test that tab characters are removed."""
+        malicious_path = "/Photos/test\t.jpg"
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        assert "\t" not in result
+
+    def test_preserves_path_separators(self):
+        """Test that path separators are preserved."""
+        path_with_separators = "/Photos/Family\\2023\\holiday.jpg"
+        result = _sanitize_path_for_logging(path_with_separators)
+        assert result == path_with_separators
+        assert "/" in result
+        assert "\\" in result
+
+    def test_preserves_printable_characters(self):
+        """Test that printable characters are preserved."""
+        normal_path = "/Photos/Family Vacation 2023 (Summer).jpg"
+        result = _sanitize_path_for_logging(normal_path)
+        assert result == normal_path
+
+    def test_handles_empty_string(self):
+        """Test handling of empty string input."""
+        result = _sanitize_path_for_logging("")
+        assert result == ""
+
+    def test_handles_unicode_characters(self):
+        """Test that Unicode characters outside control range are preserved."""
+        path_with_unicode = "/Photos/фото.jpg"
+        result = _sanitize_path_for_logging(path_with_unicode)
+        assert result == path_with_unicode
+
+    def test_removes_extended_control_characters(self):
+        """Test removal of extended control characters (128-159)."""
+        malicious_path = "/Photos/test\x80\x9f.jpg"  # Extended control chars
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        assert "\x80" not in result
+        assert "\x9f" not in result
+
+    def test_complex_malicious_path(self):
+        """Test sanitization of a complex malicious path with multiple control chars."""
+        malicious_path = "/Photos/test\n\r\t\x00\x01\x7f\x80.jpg"
+        result = _sanitize_path_for_logging(malicious_path)
+        assert result == "/Photos/test.jpg"
+        # Ensure no control characters remain
+        for char in malicious_path:
+            if ord(char) < 32 or (ord(char) >= 127 and ord(char) < 160):
+                if char not in "/\\":  # Path separators are allowed
+                    assert char not in result
 
 
 class TestProcessImages:
