@@ -54,6 +54,9 @@ htmlcov/
 coverage.xml
 *.cover
 
+# Security scanning cache
+.pip-audit-cache/
+
 # Temporary files
 temp/
 tmp/

@@ -29,6 +29,13 @@ repos:
         args: [-ll]
         exclude: ^(venv/|tests/)
 
+  # Dependency vulnerability scanning
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.7.3
+    hooks:
+      - id: pip-audit
+        args: [--requirement, requirements.txt, --cache-dir, .pip-audit-cache]
+
   # Generic checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

@@ -99,18 +99,19 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install bandit safety
+        pip install bandit pip-audit
         pip install -r requirements.txt
 
     - name: Run bandit security checks
       run: |
-        bandit -r scripts/ -f json -o bandit-report.json || true
-        bandit -r scripts/ || true
+        # Run bandit with medium and higher severity (-ll)
+        # False positives are documented with # nosec comments in the code
+        bandit -r scripts/ -ll
 
     - name: Check for known vulnerabilities in dependencies
       run: |
-        safety check --json || true
-      continue-on-error: true
+        # pip-audit checks for known vulnerabilities in installed packages
+        pip-audit --requirement requirements.txt
 
   validate-config:
     name: Validate Configuration
@@ -229,7 +230,8 @@ jobs:
           exit 1
         fi
         if [ "${{ needs.security.result }}" != "success" ]; then
-          echo "⚠️  Security checks had warnings (non-blocking)"
+          echo "❌ Security checks failed"
+          exit 1
         fi
         if [ "${{ needs.validate-config.result }}" != "success" ]; then
           echo "❌ Configuration validation failed"
