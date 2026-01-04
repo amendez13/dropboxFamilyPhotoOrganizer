@@ -267,12 +267,16 @@ def perform_operations(matches, destination_folder, dbx_client, operation, log_f
 
         if log_entry["success"]:
             success_count += 1
-            logger.info(f"✓ {operation.capitalize()}d: {source_path} → {dest_path}")
+            # Use proper past tense for the operation
+            past_tense = {"copy": "Copied", "move": "Moved"}.get(operation, operation.capitalize() + "d")
+            logger.info(f"✓ {past_tense}: {source_path} → {dest_path}")
         else:
             logger.error(f"✗ Failed to {operation}: {source_path}")
 
     logger.info("")
-    logger.info(f"Successfully {operation}d {success_count}/{len(matches)} file(s)")
+    # Use proper past tense for the operation
+    past_tense = {"copy": "copied", "move": "moved"}.get(operation, operation + "d")
+    logger.info(f"Successfully {past_tense} {success_count}/{len(matches)} file(s)")
     if skipped_count > 0:
         logger.info(f"Skipped {skipped_count} file(s) with duplicate filenames")
 
