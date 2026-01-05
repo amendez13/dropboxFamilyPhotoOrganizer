@@ -787,11 +787,21 @@ The project includes two GitHub Actions workflows for automated code assistance 
 
 ### Claude Code Review (`.github/workflows/claude-code-review.yml`)
 
-**Purpose:** Manual PR review workflow for getting detailed code review feedback from Claude.
+**Purpose:** On-demand PR review workflow for getting detailed code review feedback from Claude.
 
-**Trigger:** Manual workflow dispatch only (as of issue #58)
+**Triggers:**
+- Comment with `/claude-review` on any pull request
+- Manual workflow dispatch via GitHub Actions UI
 
 **How to Use:**
+
+*Option 1: Comment Trigger (Recommended)*
+Simply comment `/claude-review` on any PR to trigger a review:
+```
+/claude-review
+```
+
+*Option 2: Manual Trigger via UI*
 1. Go to the Actions tab in GitHub
 2. Select "Claude Code Review" workflow
 3. Click "Run workflow"
@@ -804,8 +814,8 @@ The project includes two GitHub Actions workflows for automated code assistance 
 - Posts review comments directly on the PR
 
 **Configuration Notes:**
-- **Manual trigger only:** Automatic triggers on push have been disabled to prevent Claude from reviewing after each push (issue #58)
-- **Optional label trigger:** You can uncomment the `pull_request` section in the workflow to enable triggering via PR labels
+- **No automatic triggers on push:** Automatic triggers have been disabled to prevent Claude from reviewing after each push (issue #58)
+- **Comment-based trigger:** Use `/claude-review` in a PR comment for easy access
 - **Actor restriction:** Only `amendez13` can trigger this workflow
 
 ### Claude Code (@claude) (`.github/workflows/claude.yml`)
@@ -947,10 +957,11 @@ Simply mention `@claude` in a comment or issue with your request:
 **Changed:**
 - Claude Code Review workflow (`.github/workflows/claude-code-review.yml`) no longer triggers automatically on PR pushes (issue #58)
 - Removed `pull_request` automatic triggers (types: `[opened, synchronize]`)
-- Changed to manual-only workflow using `workflow_dispatch`
+- Changed to on-demand workflow using comment trigger and manual dispatch
 
 **Added:**
-- Manual trigger input for PR number in Claude Code Review workflow
+- Comment-based trigger: Use `/claude-review` in any PR comment to trigger a review
+- `issue_comment` event listener for comment-based triggering
+- Manual trigger input for PR number in Claude Code Review workflow (`workflow_dispatch`)
 - Documentation section for Claude Code workflows in CI.md
-- Comments in workflow explaining how to enable optional label-based triggering
-- Instructions on how to manually trigger the workflow via GitHub Actions UI
+- Instructions for both comment-based and manual UI-based triggering

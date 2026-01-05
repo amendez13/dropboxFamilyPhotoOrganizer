@@ -1,7 +1,11 @@
 name: Claude Code Review
 
 on:
-  # Manual trigger only - use "Run workflow" button in GitHub Actions tab
+  # Trigger on comment with "/claude-review" keyword
+  issue_comment:
+    types: [created]
+
+  # Manual trigger via GitHub Actions UI
   workflow_dispatch:
     inputs:
       pr_number:
@@ -9,20 +13,23 @@ on:
         required: true
         type: number
 
-  # Optional: Trigger on PR label (uncomment to enable)
-  # pull_request:
-  #   types: [labeled]
-
   # Note: Automatic triggers on push (synchronize) have been disabled per issue #58
   # This prevents Claude from reviewing after each push to a PR
+  #
   # To trigger a review:
-  #   1. Use the "Run workflow" button in the Actions tab
-  #   2. Or add a label trigger (uncomment the pull_request section above)
+  #   1. Comment "/claude-review" on any PR
+  #   2. Or use the "Run workflow" button in the Actions tab
 
 jobs:
   claude-review:
-    # Only allow amendez13 to trigger Claude Code Review
-    if: github.actor == 'amendez13'
+    # Only allow amendez13 to trigger, and only on PR comments with "/claude-review"
+    if: |
+      github.actor == 'amendez13' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request &&
+         contains(github.event.comment.body, '/claude-review'))
+      )
 
     runs-on: ubuntu-latest
     permissions:
@@ -45,7 +52,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+            PR NUMBER: ${{ github.event.issue.number || inputs.pr_number }}
 
             Please review this pull request and provide feedback on:
             - Code quality and best practices
