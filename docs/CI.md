@@ -18,13 +18,14 @@ Location: `.github/workflows/ci.yml`
 
 ### CI Jobs
 
-The pipeline consists of 5 independent jobs that run in parallel:
+The pipeline consists of 6 independent jobs that run in parallel:
 
 1. **Lint and Code Quality**
 2. **Testing** (matrix across Python versions)
-3. **Security Checks**
-4. **Configuration Validation**
-5. **Build Status Check** (runs after all other jobs)
+3. **Coverage Check** (non-voting)
+4. **Security Checks**
+5. **Configuration Validation**
+6. **Build Status Check** (runs after all other jobs)
 
 ## Job Details
 
@@ -93,7 +94,68 @@ pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
   - Dependency import checks
   - Configuration file validation
 
-### 3. Security Checks
+### 3. Coverage Check (Non-Voting)
+
+Monitors code coverage with a 90% target. This check is **non-voting** - it will not block PR merging even if coverage is below the threshold.
+
+**Target:** 90% code coverage
+
+**Status:** Advisory only (does not block merges)
+
+**Tools Used:**
+- **pytest-cov** - Coverage measurement
+- **coverage.py** - Coverage reporting
+
+**Commands:**
+```bash
+# Run tests with coverage and fail if below threshold
+pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=90
+```
+
+**Configuration:**
+Located in `pyproject.toml` under `[tool.coverage.run]` and `[tool.coverage.report]`
+
+**Whitelisting Files:**
+Files that are difficult to unit test (e.g., interactive CLI scripts, cloud providers requiring external services) can be excluded from coverage requirements:
+
+```toml
+[tool.coverage.run]
+omit = [
+    # Interactive CLI scripts
+    "scripts/authorize_dropbox.py",
+    "scripts/check_account.py",
+    # Cloud providers (require external services)
+    "scripts/face_recognizer/providers/aws_provider.py",
+    "scripts/face_recognizer/providers/azure_provider.py",
+]
+```
+
+**Whitelisting Code Patterns:**
+Specific code patterns can be excluded using `exclude_lines`:
+
+```toml
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",          # Explicit exclusion comment
+    "if __name__ == .__main__.:", # Main blocks
+    "def main\\(\\):",            # Main entry points
+    "@abstractmethod",            # Abstract methods
+]
+```
+
+**Inline Exclusion:**
+Use `# pragma: no cover` to exclude specific lines:
+
+```python
+def debug_only_function():  # pragma: no cover
+    """This function is excluded from coverage."""
+    pass
+```
+
+**Coverage Artifacts:**
+The HTML coverage report is uploaded as an artifact and retained for 14 days. Download from the Actions run summary page.
+
+### 4. Security Checks
 
 Scans for security vulnerabilities in code and dependencies. **Security checks are blocking** - builds will fail if vulnerabilities are found.
 
@@ -115,7 +177,7 @@ pip-audit --requirement requirements.txt
 - Always include a brief justification in the comment
 - Example: `token_access_type="offline",  # nosec B106 - Request refresh token`
 
-### 4. Configuration Validation
+### 5. Configuration Validation
 
 Validates configuration files and Python syntax.
 
@@ -132,7 +194,7 @@ python -c "import yaml; yaml.safe_load(open('config/config.example.yaml'))"
 python -m py_compile scripts/**/*.py
 ```
 
-### 5. Integration Tests
+### 6. Integration Tests
 
 Tests actual Dropbox API connectivity using GitHub Secrets.
 
@@ -150,7 +212,7 @@ Tests actual Dropbox API connectivity using GitHub Secrets.
 **Configuration Required:**
 See [GitHub Secrets Setup](#github-secrets-setup) section below for configuration instructions.
 
-### 6. Build Status Check
+### 7. Build Status Check
 
 Final job that verifies all required checks passed.
 
@@ -159,6 +221,7 @@ Final job that verifies all required checks passed.
 **Behavior:**
 - ✅ Passes if all dependent jobs succeed
 - ❌ Fails if any required job fails (including security checks)
+- ⚠️ Coverage check is non-voting and does not affect build status
 
 ## Configuration Files
 
