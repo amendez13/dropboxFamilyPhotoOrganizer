@@ -281,7 +281,7 @@ class TestPerformOperations:
 
         mock_dbx_client.copy_file.return_value = True
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         # Should only call copy_file once (second file has duplicate filename)
         assert mock_dbx_client.copy_file.call_count == 1
@@ -296,7 +296,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, True, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", True, mock_logger)
 
         # Should not call any file operations
         mock_dbx_client.copy_file.assert_not_called()
@@ -310,7 +310,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_dbx_client.copy_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Copied: /Photos/test.jpg → /Matches/test.jpg")
@@ -322,7 +322,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "move", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "move", False, mock_logger)
 
         mock_dbx_client.move_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Moved: /Photos/test.jpg → /Matches/test.jpg")
@@ -337,7 +337,7 @@ class TestPerformOperations:
         # Mock failed copy
         mock_dbx_client.copy_file.return_value = False
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.error.assert_called_with("✗ Failed to copy: /Photos/test.jpg")
 
@@ -349,7 +349,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("Successfully copied 2/2 file(s)")
 
@@ -358,7 +358,7 @@ class TestPerformOperations:
         matches = []
         destination_folder = "/Matches"
 
-        perform_operations(matches, destination_folder, mock_dbx_client, "copy", None, False, mock_logger)
+        perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("No matching images found")
         mock_dbx_client.copy_file.assert_not_called()
