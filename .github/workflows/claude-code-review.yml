@@ -22,13 +22,11 @@ on:
 
 jobs:
   claude-review:
-    # Only allow amendez13 to trigger, and only on PR comments with "/claude-review"
+    # Only allow amendez13 to trigger on comments with "/claude-review"
     if: |
       github.actor == 'amendez13' && (
         github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issue_comment' &&
-         github.event.issue.pull_request &&
-         contains(github.event.comment.body, '/claude-review'))
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/claude-review'))
       )
 
     runs-on: ubuntu-latest
