@@ -1,14 +1,23 @@
 name: Claude Code Review
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+  # Manual trigger only - use "Run workflow" button in GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+
+  # Optional: Trigger on PR label (uncomment to enable)
+  # pull_request:
+  #   types: [labeled]
+
+  # Note: Automatic triggers on push (synchronize) have been disabled per issue #58
+  # This prevents Claude from reviewing after each push to a PR
+  # To trigger a review:
+  #   1. Use the "Run workflow" button in the Actions tab
+  #   2. Or add a label trigger (uncomment the pull_request section above)
 
 jobs:
   claude-review:
@@ -36,7 +45,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
 
             Please review this pull request and provide feedback on:
             - Code quality and best practices

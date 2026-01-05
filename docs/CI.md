@@ -781,6 +781,56 @@ Comment on Dependabot PRs with these commands:
 - Expand grouping rules to consolidate more updates
 - Review and merge more frequently
 
+## Claude Code Workflows
+
+The project includes two GitHub Actions workflows for automated code assistance using Claude Code.
+
+### Claude Code Review (`.github/workflows/claude-code-review.yml`)
+
+**Purpose:** Manual PR review workflow for getting detailed code review feedback from Claude.
+
+**Trigger:** Manual workflow dispatch only (as of issue #58)
+
+**How to Use:**
+1. Go to the Actions tab in GitHub
+2. Select "Claude Code Review" workflow
+3. Click "Run workflow"
+4. Enter the PR number you want to review
+5. Click "Run workflow" button
+
+**What It Does:**
+- Analyzes the pull request code changes
+- Provides feedback on code quality, best practices, potential bugs, performance, and security
+- Posts review comments directly on the PR
+
+**Configuration Notes:**
+- **Manual trigger only:** Automatic triggers on push have been disabled to prevent Claude from reviewing after each push (issue #58)
+- **Optional label trigger:** You can uncomment the `pull_request` section in the workflow to enable triggering via PR labels
+- **Actor restriction:** Only `amendez13` can trigger this workflow
+
+### Claude Code (@claude) (`.github/workflows/claude.yml`)
+
+**Purpose:** Interactive Claude assistant triggered by mentions.
+
+**Triggers:**
+- Issue comments containing `@claude`
+- Pull request review comments containing `@claude`
+- Pull request reviews containing `@claude`
+- Issues opened/assigned with `@claude` in title or body
+
+**How to Use:**
+Simply mention `@claude` in a comment or issue with your request:
+- On a PR: "Hey @claude, can you help optimize this function?"
+- In an issue: "Title: @claude implement feature X"
+
+**What It Does:**
+- Responds to specific requests
+- Can create/update issues and PRs
+- Can perform code changes based on instructions
+- Uses repository's CLAUDE.md for guidance
+
+**Actor Restriction:** Only `amendez13` can trigger this workflow
+
 ## Future Enhancements
 
 ### Planned Additions
@@ -891,3 +941,16 @@ Comment on Dependabot PRs with these commands:
 **Removed:**
 - `|| true` bypass from bandit and safety commands in CI workflow
 - `continue-on-error: true` from security checks
+
+### 2026-01-05 - Disable Automatic Claude PR Review
+
+**Changed:**
+- Claude Code Review workflow (`.github/workflows/claude-code-review.yml`) no longer triggers automatically on PR pushes (issue #58)
+- Removed `pull_request` automatic triggers (types: `[opened, synchronize]`)
+- Changed to manual-only workflow using `workflow_dispatch`
+
+**Added:**
+- Manual trigger input for PR number in Claude Code Review workflow
+- Documentation section for Claude Code workflows in CI.md
+- Comments in workflow explaining how to enable optional label-based triggering
+- Instructions on how to manually trigger the workflow via GitHub Actions UI
