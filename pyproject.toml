@@ -61,7 +61,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 90
+# Note: fail_under is NOT set here - it's only enforced in the dedicated
+# coverage CI job via --cov-fail-under=90 to keep it non-voting
 show_missing = true
 skip_covered = false
 exclude_lines = [
