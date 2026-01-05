@@ -49,9 +49,21 @@ omit = [
     "*/tests/*",
     "*/venv/*",
     "*/.venv/*",
+    # Whitelisted files - excluded from coverage requirements
+    # Interactive CLI scripts
+    "scripts/authorize_dropbox.py",
+    "scripts/check_account.py",
+    "scripts/list_folders.py",
+    "scripts/test_dropbox_connection.py",
+    # Cloud provider implementations (require external services)
+    "scripts/face_recognizer/providers/aws_provider.py",
+    "scripts/face_recognizer/providers/azure_provider.py",
 ]
 
 [tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -59,4 +71,7 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    # Whitelisted patterns - excluded from coverage requirements
+    "def main\\(\\):",  # Main entry points (often hard to unit test)
+    "@abstractmethod",  # Abstract methods
 ]
