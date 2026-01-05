@@ -23,6 +23,51 @@ from scripts.face_recognizer import get_provider  # noqa: E402
 from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider  # noqa: E402
 from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
+# Global audit logger - initialized when setup_audit_logging is called
+_audit_logger: Optional[logging.Logger] = None
+
+
+def setup_audit_logging(log_file: str) -> logging.Logger:
+    """
+    Set up a dedicated logger for audit operations.
+
+    Uses Python's logging module with a FileHandler to provide better
+    concurrency handling compared to direct file I/O. The logging module
+    handles thread safety internally.
+
+    Args:
+        log_file: Path to the audit log file
+
+    Returns:
+        Configured audit logger instance
+    """
+    # Create a unique logger for audit operations
+    audit_logger = logging.getLogger("audit_operations")
+    audit_logger.setLevel(logging.INFO)
+    audit_logger.propagate = False  # Don't propagate to root logger
+
+    # Close and remove any existing handlers to avoid duplicates and file handle leaks
+    for handler in audit_logger.handlers[:]:
+        handler.close()
+        audit_logger.removeHandler(handler)
+
+    # Ensure log directory exists
+    log_dir = os.path.dirname(os.path.abspath(log_file))
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    # Create file handler for audit log
+    file_handler = logging.FileHandler(log_file, mode="a")
+    file_handler.setLevel(logging.INFO)
+
+    # Use a simple formatter that just outputs the message (which will be JSON)
+    formatter = logging.Formatter("%(message)s")
+    file_handler.setFormatter(formatter)
+
+    audit_logger.addHandler(file_handler)
+
+    return audit_logger
+
 
 def load_config(config_path: str = "../config/config.yaml") -> Dict[str, Any]:
     """
@@ -66,18 +111,19 @@ def _sanitize_path_for_logging(path: str) -> str:
     return "".join(char for char in path if (ord(char) >= 32 and ord(char) < 127) or ord(char) >= 160 or char in "/\\")
 
 
-def safe_organize(
-    dbx: DropboxClient, source_path: str, dest_path: str, operation: str = "copy", log_file: Optional[str] = None
-) -> Dict[str, Any]:
+def safe_organize(dbx: DropboxClient, source_path: str, dest_path: str, operation: str = "copy") -> Dict[str, Any]:
     """
     Safely organize a file by copying or moving it, with audit logging.
+
+    Audit logging is performed using a global audit logger configured via
+    setup_audit_logging(). The logging module provides better thread safety
+    for concurrent writes compared to direct file I/O.
 
     Args:
         dbx: Dropbox client instance
         source_path: Source file path in Dropbox
         dest_path: Destination file path in Dropbox
         operation: Operation to perform ('copy' or 'move')
-        log_file: Path to log file for recording operations
 
     Returns:
         Log entry dictionary with operation details
@@ -102,19 +148,16 @@ def safe_organize(
 
     except Exception as e:
         log_entry["error"] = str(e)
-        dbx.logger.error(f"Error during {operation} operation: {e}")
+        dbx.logger.error(f"Error during {operation} operation from '{source_path}' to '{dest_path}': {e}")
 
-    # Log operation to file if specified
-    if log_file:
+    # Log operation using audit logger if available
+    # The logging module provides better thread safety for concurrent writes
+    # compared to direct file I/O
+    if _audit_logger:
         try:
-            # Ensure log directory exists
-            log_dir = os.path.dirname(os.path.abspath(log_file))
-            if log_dir:  # Only create if there's a directory component
-                os.makedirs(log_dir, exist_ok=True)
-            with open(log_file, "a") as f:
-                f.write(json.dumps(log_entry) + "\n")
+            _audit_logger.info(json.dumps(log_entry))
         except Exception as e:
-            logging.error(f"Failed to write to log file: {e}")
+            logging.error(f"Failed to write to audit log: {e}")
 
     return log_entry
 
@@ -234,7 +277,6 @@ def perform_operations(
     destination_folder: str,
     dbx_client: DropboxClient,
     operation: str,
-    log_file: Optional[str],
     dry_run: bool,
     logger: logging.Logger,
 ) -> None:
@@ -242,7 +284,7 @@ def perform_operations(
     Perform copy/move operations on files that matched face recognition.
 
     Copies or moves matched files to the destination folder, handling duplicates
-    and logging all operations for audit purposes.
+    and logging all operations for audit purposes using the global audit logger.
 
     Args:
         matches: List of match dicts from process_images(), each containing
@@ -250,7 +292,6 @@ def perform_operations(
         destination_folder: Dropbox path where matched files will be copied/moved
         dbx_client: Initialized DropboxClient instance for file operations
         operation: Operation type - either 'copy' or 'move'
-        log_file: Path to log file for recording operations, or None to disable
         dry_run: If True, only report what would be done without actual operations
         logger: Logger instance for output
 
@@ -291,7 +332,7 @@ def perform_operations(
             continue
 
         processed_destinations.add(dest_path)
-        log_entry = safe_organize(dbx_client, source_path, dest_path, operation, log_file)
+        log_entry = safe_organize(dbx_client, source_path, dest_path, operation)
 
         if log_entry["success"]:
             success_count += 1
@@ -331,6 +372,77 @@ def _get_reference_photos(reference_photos_dir: str, image_extensions: List[str]
     return reference_photos
 
 
+def _validate_config(
+    config: Dict[str, Any], logger: logging.Logger
+) -> Tuple[Dict[str, Any], Any, Any, Dict[str, Any], Dict[str, Any]]:
+    """
+    Validate and extract configuration values.
+
+    Returns tuple of (dropbox_config, source_folder, destination_folder, face_config, processing_config)
+    Raises ValueError if configuration is invalid.
+    """
+    dropbox_config = config.get("dropbox", {})
+    source_folder = dropbox_config.get("source_folder")
+    destination_folder = dropbox_config.get("destination_folder")
+
+    if not source_folder or not destination_folder:
+        raise ValueError("Source and destination folders must be configured")
+    if source_folder == destination_folder:
+        raise ValueError("Source and destination folders must be different")
+
+    face_config = config.get("face_recognition", {})
+    processing = config.get("processing", {})
+
+    return dropbox_config, source_folder, destination_folder, face_config, processing
+
+
+def _setup_face_provider(face_config: Dict[str, Any], tolerance: float, logger: logging.Logger) -> BaseFaceRecognitionProvider:
+    """
+    Initialize and configure the face recognition provider.
+
+    Returns the configured provider instance.
+    """
+    provider_name = face_config.get("provider", "local")
+    logger.info(f"Initializing {provider_name} face recognition provider...")
+    local_config = face_config.get(provider_name, {})
+
+    # Use recognition-specific num_jitters if available, otherwise fall back to default
+    recognition_config = local_config.get("recognition", {})
+    recognition_num_jitters = recognition_config.get("num_jitters", local_config.get("num_jitters", 1))
+
+    # Build config for provider with recognition parameters
+    provider_config = {
+        "model": local_config.get("model", "hog"),
+        "encoding_model": local_config.get("encoding_model", "large"),
+        "num_jitters": recognition_num_jitters,
+        "tolerance": tolerance,
+    }
+
+    logger.info(f"  Detection model: {provider_config['model']}")
+    logger.info(f"  Encoding model: {provider_config['encoding_model']}")
+    logger.info(f"  Num jitters (recognition): {provider_config['num_jitters']}")
+    logger.info(f"  Tolerance: {tolerance}")
+
+    return get_provider(provider_name, provider_config)
+
+
+def _setup_audit_logger_if_enabled(log_file: Optional[str], logger: logging.Logger) -> None:
+    """
+    Setup audit logging if a log file is specified.
+
+    Sets the global _audit_logger variable.
+    """
+    global _audit_logger
+    if log_file:
+        try:
+            _audit_logger = setup_audit_logging(log_file)
+            logger.info(f"Audit logging enabled: {log_file}")
+        except Exception as e:
+            logger.warning(f"Failed to setup audit logging: {e}")
+            logger.warning("Continuing without audit logging")
+            _audit_logger = None
+
+
 def main() -> int:
     """Main entry point for the photo organizer."""
     parser = argparse.ArgumentParser(description="Organize Dropbox photos based on face recognition")
@@ -355,27 +467,12 @@ def main() -> int:
         logger.info("Loading configuration...")
         config = load_config(args.config)
 
-        # Extract Dropbox configuration
-        dropbox_config = config.get("dropbox", {})
-        source_folder = dropbox_config.get("source_folder")
-        destination_folder = dropbox_config.get("destination_folder")
+        # Validate configuration
+        _, source_folder, destination_folder, face_config, processing = _validate_config(config, logger)
 
-        # Validate required configuration
-        if not source_folder or not destination_folder:
-            logger.error("Source and destination folders must be configured")
-            return 1
-        if source_folder == destination_folder:
-            logger.error("Source and destination folders must be different")
-            return 1
-
-        # Get face recognition configuration
-        face_config = config.get("face_recognition", {})
-        provider_name = face_config.get("provider", "local")
+        # Extract face recognition configuration
         reference_photos_dir = face_config.get("reference_photos_dir", "./reference_photos")
         tolerance = face_config.get("tolerance", 0.6)
-
-        # Get processing configuration
-        processing = config.get("processing", {})
         dry_run = args.dry_run or processing.get("dry_run", False)
         image_extensions = processing.get("image_extensions", [".jpg", ".jpeg", ".png", ".heic"])
         verbose_processing = processing.get("verbose", False)
@@ -413,27 +510,7 @@ def main() -> int:
         logger.info("✓ Connected to Dropbox")
 
         # Initialize face recognition provider
-        logger.info(f"Initializing {provider_name} face recognition provider...")
-        local_config = face_config.get(provider_name, {})
-
-        # Use recognition-specific num_jitters if available, otherwise fall back to default
-        recognition_config = local_config.get("recognition", {})
-        recognition_num_jitters = recognition_config.get("num_jitters", local_config.get("num_jitters", 1))
-
-        # Build config for provider with recognition parameters
-        provider_config = {
-            "model": local_config.get("model", "hog"),
-            "encoding_model": local_config.get("encoding_model", "large"),
-            "num_jitters": recognition_num_jitters,
-            "tolerance": tolerance,
-        }
-
-        logger.info(f"  Detection model: {provider_config['model']}")
-        logger.info(f"  Encoding model: {provider_config['encoding_model']}")
-        logger.info(f"  Num jitters (recognition): {provider_config['num_jitters']}")
-        logger.info(f"  Tolerance: {tolerance}")
-
-        provider = get_provider(provider_name, provider_config)
+        provider = _setup_face_provider(face_config, tolerance, logger)
 
         # Load reference photos
         logger.info(f"Loading reference photos from {reference_photos_dir}...")
@@ -479,11 +556,17 @@ def main() -> int:
         logger.info(f"Errors: {errors}")
         logger.info("")
 
+        # Setup audit logging if enabled
+        _setup_audit_logger_if_enabled(log_file, logger)
+
         # Perform operations
-        perform_operations(matches, destination_folder, dbx_client, operation, log_file, dry_run, logger)
+        perform_operations(matches, destination_folder, dbx_client, operation, dry_run, logger)
 
         return 0
 
+    except ValueError as e:
+        logger.error(str(e))
+        return 1
     except FileNotFoundError as e:
         logger.error(f"Configuration file not found: {e}")
         logger.error("Please copy config/config.example.yaml to config/config.yaml and configure it")

@@ -191,6 +191,8 @@ In addition to application logs, file operations are also logged to `operations.
 {"timestamp": "2024-01-04T23:59:42.123456", "source": "/Photos/Family/photo.jpg", "destination": "/Photos/Person/photo.jpg", "operation": "copy", "success": true}
 ```
 
+The audit logging system uses Python's `logging` module with a dedicated `FileHandler`, providing thread-safe writes. This ensures that concurrent operations (if running multiple instances) won't corrupt log entries.
+
 ## Project Structure
 
 ```
