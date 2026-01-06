@@ -304,6 +304,18 @@ class TestTokenStorage:
 
             assert result is False
 
+    def test_delete_tokens_failure(self):
+        """Test token deletion failure due to an exception."""
+        mock_keyring_module = Mock()
+        mock_keyring_module.delete_password.side_effect = Exception("Deletion error")
+
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
+            storage = TokenStorage()
+            result = storage.delete_tokens(username="testuser")
+
+            assert result is False
+            mock_keyring_module.delete_password.assert_called_once_with("dropbox-photo-organizer", "testuser")
+
 
 class TestDropboxClientFactory:
     """Test cases for DropboxClientFactory class."""
