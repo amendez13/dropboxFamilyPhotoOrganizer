@@ -276,6 +276,18 @@ class TestTokenStorage:
 
             assert loaded_tokens is None
 
+    def test_load_tokens_failure(self):
+        """Test loading tokens failure due to an exception."""
+        mock_keyring_module = Mock()
+        mock_keyring_module.get_password.side_effect = Exception("Keyring read error")
+
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
+            storage = TokenStorage()
+            loaded_tokens = storage.load_tokens(username="testuser")
+
+            assert loaded_tokens is None
+            mock_keyring_module.get_password.assert_called_once_with("dropbox-photo-organizer", "testuser")
+
     def test_delete_tokens_success(self):
         """Test successful token deletion."""
         mock_keyring_module = Mock()
@@ -303,6 +315,18 @@ class TestTokenStorage:
             result = storage.delete_tokens()
 
             assert result is False
+
+    def test_delete_tokens_failure(self):
+        """Test token deletion failure due to an exception."""
+        mock_keyring_module = Mock()
+        mock_keyring_module.delete_password.side_effect = Exception("Deletion error")
+
+        with patch.dict("sys.modules", {"keyring": mock_keyring_module}):
+            storage = TokenStorage()
+            result = storage.delete_tokens(username="testuser")
+
+            assert result is False
+            mock_keyring_module.delete_password.assert_called_once_with("dropbox-photo-organizer", "testuser")
 
 
 class TestDropboxClientFactory:
@@ -458,6 +482,67 @@ class TestDropboxClientFactory:
         factory = DropboxClientFactory(config)
         with pytest.raises(ValueError, match="Invalid refresh token format"):
             factory.create_client()
+
+    @patch("scripts.auth.client_factory.DropboxClient")
+    @patch("scripts.auth.client_factory.TokenStorage")
+    def test_token_refresh_callback_execution(self, mock_storage_class, mock_client_class):
+        """Test that token_refresh_callback is properly created and can be executed."""
+        mock_storage = Mock()
+        mock_storage.keyring_available = True
+        mock_storage.load_tokens.return_value = {
+            "refresh_token": "test_refresh_token",
+            "access_token": "test_access_token",
+            "expires_at": "123456",
+        }
+        mock_storage_class.return_value = mock_storage
+
+        config = {"dropbox": {"app_key": "test_app_key", "app_secret": "test_app_secret", "token_storage": "keyring"}}
+
+        factory = DropboxClientFactory(config)
+        factory.create_client()
+
+        # Get the callback that was passed to DropboxClient
+        call_kwargs = mock_client_class.call_args[1]
+        callback = call_kwargs["token_refresh_callback"]
+
+        # Execute the callback to cover lines 57-58
+        callback("new_access_token", "new_expires_at")
+
+    def test_get_refresh_token_config_mode_no_token(self):
+        """Test getting refresh token from config mode when no token exists."""
+        config = {"dropbox": {"token_storage": "config"}}  # No refresh_token
+
+        factory = DropboxClientFactory(config)
+        token = factory._get_refresh_token(config["dropbox"], "config")
+
+        assert token is None
+
+    @patch("scripts.auth.client_factory.TokenStorage")
+    def test_get_refresh_token_keyring_unavailable(self, mock_storage_class):
+        """Test getting refresh token when keyring is not available."""
+        mock_storage = Mock()
+        mock_storage.keyring_available = False
+        mock_storage_class.return_value = mock_storage
+
+        config = {"dropbox": {}}  # No config fallback
+
+        factory = DropboxClientFactory(config)
+        token = factory._get_refresh_token(config["dropbox"], "keyring")
+
+        assert token is None
+
+    @patch("scripts.auth.client_factory.TokenStorage")
+    def test_get_refresh_token_keyring_unavailable_with_invalid_config_fallback(self, mock_storage_class):
+        """Test fallback to config with invalid type when keyring is unavailable."""
+        mock_storage = Mock()
+        mock_storage.keyring_available = False
+        mock_storage_class.return_value = mock_storage
+
+        config = {"dropbox": {"refresh_token": 12345}}  # Invalid type in fallback
+
+        factory = DropboxClientFactory(config)
+        with pytest.raises(ValueError, match="Invalid refresh token format"):
+            factory._get_refresh_token(config["dropbox"], "keyring")
 
 
 if __name__ == "__main__":
