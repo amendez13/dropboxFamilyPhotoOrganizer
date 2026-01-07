@@ -2,13 +2,15 @@
 
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Generator
 from unittest.mock import MagicMock, Mock
 
 import pytest
 
 
 @pytest.fixture
-def mock_dependencies():
+def mock_dependencies() -> Generator[None, None, None]:
     """Mock external dependencies to avoid circular imports."""
     # Mock dependencies before importing organize_photos
     sys.modules["scripts.dropbox_client"] = Mock()
@@ -21,7 +23,7 @@ def mock_dependencies():
 
 
 @pytest.fixture
-def organize_photos_module(mock_dependencies):
+def organize_photos_module(mock_dependencies: None) -> ModuleType:
     """Load the organize_photos module with mocked dependencies."""
     import importlib.util
 
@@ -29,6 +31,7 @@ def organize_photos_module(mock_dependencies):
         "organize_photos_module",
         Path(__file__).parent.parent / "scripts" / "organize_photos.py",
     )
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -37,7 +40,7 @@ def organize_photos_module(mock_dependencies):
 class TestSanitizePathForLogging:
     """Test _sanitize_path_for_logging function."""
 
-    def test_sanitizes_control_characters(self, organize_photos_module):
+    def test_sanitizes_control_characters(self, organize_photos_module: ModuleType) -> None:
         """Test that control characters are removed from paths."""
         # Test various control characters
         malicious_path = "/Photos/test\x00\x01\x02\x03.jpg"  # Null and other control chars
@@ -46,28 +49,28 @@ class TestSanitizePathForLogging:
         assert "\x00" not in result
         assert "\x01" not in result
 
-    def test_sanitizes_newline_characters(self, organize_photos_module):
+    def test_sanitizes_newline_characters(self, organize_photos_module: ModuleType) -> None:
         """Test that newline characters are removed (log injection prevention)."""
         malicious_path = "/Photos/test\n.jpg"
         result = organize_photos_module._sanitize_path_for_logging(malicious_path)
         assert result == "/Photos/test.jpg"
         assert "\n" not in result
 
-    def test_sanitizes_carriage_return(self, organize_photos_module):
+    def test_sanitizes_carriage_return(self, organize_photos_module: ModuleType) -> None:
         """Test that carriage return characters are removed."""
         malicious_path = "/Photos/test\r.jpg"
         result = organize_photos_module._sanitize_path_for_logging(malicious_path)
         assert result == "/Photos/test.jpg"
         assert "\r" not in result
 
-    def test_sanitizes_tab_characters(self, organize_photos_module):
+    def test_sanitizes_tab_characters(self, organize_photos_module: ModuleType) -> None:
         """Test that tab characters are removed."""
         malicious_path = "/Photos/test\t.jpg"
         result = organize_photos_module._sanitize_path_for_logging(malicious_path)
         assert result == "/Photos/test.jpg"
         assert "\t" not in result
 
-    def test_preserves_path_separators(self, organize_photos_module):
+    def test_preserves_path_separators(self, organize_photos_module: ModuleType) -> None:
         """Test that path separators are preserved."""
         path_with_separators = "/Photos/Family\\2023\\holiday.jpg"
         result = organize_photos_module._sanitize_path_for_logging(path_with_separators)
@@ -75,24 +78,24 @@ class TestSanitizePathForLogging:
         assert "/" in result
         assert "\\" in result
 
-    def test_preserves_printable_characters(self, organize_photos_module):
+    def test_preserves_printable_characters(self, organize_photos_module: ModuleType) -> None:
         """Test that printable characters are preserved."""
         normal_path = "/Photos/Family Vacation 2023 (Summer).jpg"
         result = organize_photos_module._sanitize_path_for_logging(normal_path)
         assert result == normal_path
 
-    def test_handles_empty_string(self, organize_photos_module):
+    def test_handles_empty_string(self, organize_photos_module: ModuleType) -> None:
         """Test handling of empty string input."""
         result = organize_photos_module._sanitize_path_for_logging("")
         assert result == ""
 
-    def test_handles_unicode_characters(self, organize_photos_module):
+    def test_handles_unicode_characters(self, organize_photos_module: ModuleType) -> None:
         """Test that Unicode characters outside control range are preserved."""
         path_with_unicode = "/Photos/фото.jpg"
         result = organize_photos_module._sanitize_path_for_logging(path_with_unicode)
         assert result == path_with_unicode
 
-    def test_removes_extended_control_characters(self, organize_photos_module):
+    def test_removes_extended_control_characters(self, organize_photos_module: ModuleType) -> None:
         """Test removal of extended control characters (128-159)."""
         malicious_path = "/Photos/test\x80\x9f.jpg"  # Extended control chars
         result = organize_photos_module._sanitize_path_for_logging(malicious_path)
@@ -100,7 +103,7 @@ class TestSanitizePathForLogging:
         assert "\x80" not in result
         assert "\x9f" not in result
 
-    def test_complex_malicious_path(self, organize_photos_module):
+    def test_complex_malicious_path(self, organize_photos_module: ModuleType) -> None:
         """Test sanitization of a complex malicious path with multiple control chars."""
         malicious_path = "/Photos/test\n\r\t\x00\x01\x7f\x80.jpg"
         result = organize_photos_module._sanitize_path_for_logging(malicious_path)
@@ -115,7 +118,7 @@ class TestSanitizePathForLogging:
 class TestProcessImages:
     """Test process_images function."""
 
-    def test_process_images_handles_missing_thumbnails(self, organize_photos_module):
+    def test_process_images_handles_missing_thumbnails(self, organize_photos_module: ModuleType) -> None:
         """Test that missing thumbnails are logged and counted as errors."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = None
@@ -137,7 +140,7 @@ class TestProcessImages:
         mock_logger.warning.assert_called_with("Could not get thumbnail for /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
-    def test_process_images_handles_missing_full_size_photos(self, organize_photos_module):
+    def test_process_images_handles_missing_full_size_photos(self, organize_photos_module: ModuleType) -> None:
         """Test that missing full-size photos are logged and counted as errors."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_file_content.return_value = None
@@ -159,7 +162,7 @@ class TestProcessImages:
         mock_logger.warning.assert_called_with("Could not download full-size photo: /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
-    def test_process_images_handles_os_errors(self, organize_photos_module):
+    def test_process_images_handles_os_errors(self, organize_photos_module: ModuleType) -> None:
         """Test that OSError during processing is caught and logged."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -181,7 +184,7 @@ class TestProcessImages:
         assert len(matches) == 0
         mock_logger.error.assert_called_with("Image processing error for /Photos/test.jpg: Disk error")
 
-    def test_process_images_handles_value_errors(self, organize_photos_module):
+    def test_process_images_handles_value_errors(self, organize_photos_module: ModuleType) -> None:
         """Test that ValueError for invalid data is caught and logged."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -203,7 +206,7 @@ class TestProcessImages:
         assert len(matches) == 0
         mock_logger.warning.assert_called_with("Invalid image data for /Photos/test.jpg: Invalid image format")
 
-    def test_process_images_handles_unexpected_exception(self, organize_photos_module):
+    def test_process_images_handles_unexpected_exception(self, organize_photos_module: ModuleType) -> None:
         """Test that unexpected exceptions are caught and logged with exc_info."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -225,7 +228,7 @@ class TestProcessImages:
         # Check that error was logged with exc_info=True
         mock_logger.error.assert_called_with("Unexpected error processing /Photos/test.jpg: Unexpected error", exc_info=True)
 
-    def test_process_images_returns_matches(self, organize_photos_module):
+    def test_process_images_returns_matches(self, organize_photos_module: ModuleType) -> None:
         """Test that face matches are correctly identified and returned."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -250,7 +253,7 @@ class TestProcessImages:
         assert matches[0]["total_faces"] == 1
         mock_logger.info.assert_any_call("✓ MATCH: /Photos/test.jpg (1/1 faces matched)")
 
-    def test_process_images_verbose_logging(self, organize_photos_module):
+    def test_process_images_verbose_logging(self, organize_photos_module: ModuleType) -> None:
         """Test verbose vs non-verbose logging modes."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -273,7 +276,7 @@ class TestProcessImages:
         # In verbose mode, should log every file
         assert mock_logger.info.call_count >= 15  # At least one call per file plus summary
 
-    def test_process_images_non_verbose_logging(self, organize_photos_module):
+    def test_process_images_non_verbose_logging(self, organize_photos_module: ModuleType) -> None:
         """Test non-verbose logging logs progress less frequently than verbose mode."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
@@ -303,7 +306,7 @@ class TestProcessImages:
 class TestPerformOperations:
     """Test perform_operations function."""
 
-    def test_perform_operations_skips_duplicates(self, organize_photos_module):
+    def test_perform_operations_skips_duplicates(self, organize_photos_module: ModuleType) -> None:
         """Test that duplicate filenames from different folders are detected and skipped."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.copy_file.return_value = True
@@ -327,7 +330,7 @@ class TestPerformOperations:
         # Should log the skipped duplicate
         mock_logger.info.assert_any_call("⊘ Skipped (duplicate filename): /Photos/folder2/photo.jpg")
 
-    def test_perform_operations_dry_run_mode(self, organize_photos_module):
+    def test_perform_operations_dry_run_mode(self, organize_photos_module: ModuleType) -> None:
         """Test that dry-run mode doesn't perform actual operations."""
         mock_dbx_client = MagicMock()
         mock_logger = Mock()
@@ -344,7 +347,7 @@ class TestPerformOperations:
         mock_dbx_client.move_file.assert_not_called()
         mock_logger.info.assert_any_call("DRY RUN MODE - No files were copied/moved")
 
-    def test_perform_operations_successful_copy(self, organize_photos_module):
+    def test_perform_operations_successful_copy(self, organize_photos_module: ModuleType) -> None:
         """Test successful copy operations."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.copy_file.return_value = True
@@ -363,7 +366,7 @@ class TestPerformOperations:
         mock_dbx_client.copy_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Copied: /Photos/test.jpg → /Matches/test.jpg")
 
-    def test_perform_operations_successful_move(self, organize_photos_module):
+    def test_perform_operations_successful_move(self, organize_photos_module: ModuleType) -> None:
         """Test successful move operations."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.move_file.return_value = True
@@ -382,7 +385,7 @@ class TestPerformOperations:
         mock_dbx_client.move_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Moved: /Photos/test.jpg → /Matches/test.jpg")
 
-    def test_perform_operations_failed_operation(self, organize_photos_module):
+    def test_perform_operations_failed_operation(self, organize_photos_module: ModuleType) -> None:
         """Test handling of failed operations."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.copy_file.return_value = False
@@ -400,7 +403,7 @@ class TestPerformOperations:
 
         mock_logger.error.assert_called_with("✗ Failed to copy: /Photos/test.jpg")
 
-    def test_perform_operations_counts_successes(self, organize_photos_module):
+    def test_perform_operations_counts_successes(self, organize_photos_module: ModuleType) -> None:
         """Test that successful operations are counted correctly."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.copy_file.return_value = True
@@ -419,7 +422,7 @@ class TestPerformOperations:
 
         mock_logger.info.assert_any_call("Successfully copied 2/2 file(s)")
 
-    def test_perform_operations_no_matches(self, organize_photos_module):
+    def test_perform_operations_no_matches(self, organize_photos_module: ModuleType) -> None:
         """Test handling when no matches are found."""
         mock_dbx_client = MagicMock()
         mock_logger = Mock()
@@ -436,7 +439,7 @@ class TestPerformOperations:
 class TestLoadConfig:
     """Test load_config function."""
 
-    def test_load_config_with_absolute_path(self, organize_photos_module, tmp_path):
+    def test_load_config_with_absolute_path(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test loading config with an absolute path."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("dropbox:\n  source_folder: /Photos\n")
@@ -445,7 +448,7 @@ class TestLoadConfig:
 
         assert config["dropbox"]["source_folder"] == "/Photos"
 
-    def test_load_config_with_relative_path(self, organize_photos_module, tmp_path):
+    def test_load_config_with_relative_path(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test loading config with a relative path resolves correctly."""
         # Create a config file
         config_file = tmp_path / "config.yaml"
@@ -456,7 +459,9 @@ class TestLoadConfig:
 
         assert config["dropbox"]["source_folder"] == "/Test"
 
-    def test_load_config_relative_path_resolution(self, organize_photos_module, tmp_path, monkeypatch):
+    def test_load_config_relative_path_resolution(
+        self, organize_photos_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that relative paths are resolved correctly relative to the script."""
         # Create a config file
         config_file = tmp_path / "config" / "config.yaml"
@@ -487,7 +492,7 @@ class TestLoadConfig:
 class TestDownloadImage:
     """Test _download_image function."""
 
-    def test_download_full_size_success(self, organize_photos_module):
+    def test_download_full_size_success(self, organize_photos_module: ModuleType) -> None:
         """Test downloading full-size image successfully."""
         mock_client = MagicMock()
         mock_client.get_file_content.return_value = b"full_image_data"
@@ -498,7 +503,7 @@ class TestDownloadImage:
         assert error is None
         mock_client.get_file_content.assert_called_once_with("/test.jpg")
 
-    def test_download_full_size_failure(self, organize_photos_module):
+    def test_download_full_size_failure(self, organize_photos_module: ModuleType) -> None:
         """Test downloading full-size image failure."""
         mock_client = MagicMock()
         mock_client.get_file_content.return_value = None
@@ -508,7 +513,7 @@ class TestDownloadImage:
         assert image_data is None
         assert error == "Could not download full-size photo: /test.jpg"
 
-    def test_download_thumbnail_success(self, organize_photos_module):
+    def test_download_thumbnail_success(self, organize_photos_module: ModuleType) -> None:
         """Test downloading thumbnail successfully."""
         mock_client = MagicMock()
         mock_client.get_thumbnail.return_value = b"thumbnail_data"
@@ -519,7 +524,7 @@ class TestDownloadImage:
         assert error is None
         mock_client.get_thumbnail.assert_called_once_with("/test.jpg", size="w256h256")
 
-    def test_download_thumbnail_with_custom_size(self, organize_photos_module):
+    def test_download_thumbnail_with_custom_size(self, organize_photos_module: ModuleType) -> None:
         """Test downloading thumbnail with custom size from config."""
         mock_client = MagicMock()
         mock_client.get_thumbnail.return_value = b"thumbnail_data"
@@ -531,7 +536,7 @@ class TestDownloadImage:
         assert error is None
         mock_client.get_thumbnail.assert_called_once_with("/test.jpg", size="w128h128")
 
-    def test_download_thumbnail_failure(self, organize_photos_module):
+    def test_download_thumbnail_failure(self, organize_photos_module: ModuleType) -> None:
         """Test downloading thumbnail failure."""
         mock_client = MagicMock()
         mock_client.get_thumbnail.return_value = None
@@ -545,7 +550,7 @@ class TestDownloadImage:
 class TestSafeOrganize:
     """Test safe_organize function."""
 
-    def test_safe_organize_invalid_operation(self, organize_photos_module):
+    def test_safe_organize_invalid_operation(self, organize_photos_module: ModuleType) -> None:
         """Test safe_organize with invalid operation raises ValueError."""
         mock_client = MagicMock()
         mock_client.logger = Mock()
@@ -559,7 +564,7 @@ class TestSafeOrganize:
         assert "error" in log_entry
         assert "Invalid operation" in log_entry["error"]
 
-    def test_safe_organize_exception_during_operation(self, organize_photos_module):
+    def test_safe_organize_exception_during_operation(self, organize_photos_module: ModuleType) -> None:
         """Test safe_organize handles exceptions during file operations."""
         mock_client = MagicMock()
         mock_client.copy_file.side_effect = Exception("Network error")
@@ -575,7 +580,7 @@ class TestSafeOrganize:
         assert "Network error" in log_entry["error"]
         mock_client.logger.error.assert_called()
 
-    def test_safe_organize_audit_log_write_failure(self, organize_photos_module):
+    def test_safe_organize_audit_log_write_failure(self, organize_photos_module: ModuleType) -> None:
         """Test safe_organize handles audit log write failures gracefully."""
         mock_client = MagicMock()
         mock_client.copy_file.return_value = True
@@ -599,7 +604,7 @@ class TestSafeOrganize:
 class TestGetReferencePhotos:
     """Test _get_reference_photos function."""
 
-    def test_get_reference_photos_finds_images(self, organize_photos_module, tmp_path):
+    def test_get_reference_photos_finds_images(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test finding reference photos in a directory."""
         # Create test image files
         (tmp_path / "photo1.jpg").write_text("fake image")
@@ -613,7 +618,7 @@ class TestGetReferencePhotos:
         assert any("photo2.png" in p for p in photos)
         assert any("photo3.jpeg" in p for p in photos)
 
-    def test_get_reference_photos_excludes_system_files(self, organize_photos_module, tmp_path):
+    def test_get_reference_photos_excludes_system_files(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test that system files (starting with .) are excluded."""
         # Create test image files including system files
         (tmp_path / "photo1.jpg").write_text("fake image")
@@ -627,13 +632,13 @@ class TestGetReferencePhotos:
         assert not any(".DS_Store" in p for p in photos)
         assert not any(".hidden.jpg" in p for p in photos)
 
-    def test_get_reference_photos_empty_directory(self, organize_photos_module, tmp_path):
+    def test_get_reference_photos_empty_directory(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test with empty directory returns empty list."""
         photos = organize_photos_module._get_reference_photos(str(tmp_path), [".jpg", ".png"])
 
         assert photos == []
 
-    def test_get_reference_photos_removes_duplicates(self, organize_photos_module, tmp_path):
+    def test_get_reference_photos_removes_duplicates(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test that duplicate entries are removed."""
         # Create a file that could be matched by multiple patterns
         (tmp_path / "photo.jpg").write_text("fake image")
@@ -647,7 +652,7 @@ class TestGetReferencePhotos:
 class TestValidateConfig:
     """Test _validate_config function."""
 
-    def test_validate_config_valid(self, organize_photos_module):
+    def test_validate_config_valid(self, organize_photos_module: ModuleType) -> None:
         """Test validation with valid configuration."""
         mock_logger = Mock()
         config = {
@@ -667,7 +672,7 @@ class TestValidateConfig:
         assert face_config["tolerance"] == 0.6
         assert processing["dry_run"] is True
 
-    def test_validate_config_missing_source_folder(self, organize_photos_module):
+    def test_validate_config_missing_source_folder(self, organize_photos_module: ModuleType) -> None:
         """Test validation fails when source folder is missing."""
         mock_logger = Mock()
         config = {
@@ -679,7 +684,7 @@ class TestValidateConfig:
         with pytest.raises(ValueError, match="Source and destination folders must be configured"):
             organize_photos_module._validate_config(config, mock_logger)
 
-    def test_validate_config_missing_destination_folder(self, organize_photos_module):
+    def test_validate_config_missing_destination_folder(self, organize_photos_module: ModuleType) -> None:
         """Test validation fails when destination folder is missing."""
         mock_logger = Mock()
         config = {
@@ -691,7 +696,7 @@ class TestValidateConfig:
         with pytest.raises(ValueError, match="Source and destination folders must be configured"):
             organize_photos_module._validate_config(config, mock_logger)
 
-    def test_validate_config_same_source_and_destination(self, organize_photos_module):
+    def test_validate_config_same_source_and_destination(self, organize_photos_module: ModuleType) -> None:
         """Test validation fails when source and destination are the same."""
         mock_logger = Mock()
         config = {
@@ -704,7 +709,7 @@ class TestValidateConfig:
         with pytest.raises(ValueError, match="Source and destination folders must be different"):
             organize_photos_module._validate_config(config, mock_logger)
 
-    def test_validate_config_empty_dropbox_section(self, organize_photos_module):
+    def test_validate_config_empty_dropbox_section(self, organize_photos_module: ModuleType) -> None:
         """Test validation fails when dropbox section is empty or missing."""
         mock_logger = Mock()
         config = {}
@@ -716,7 +721,7 @@ class TestValidateConfig:
 class TestSetupFaceProvider:
     """Test _setup_face_provider function."""
 
-    def test_setup_face_provider_default_config(self, organize_photos_module):
+    def test_setup_face_provider_default_config(self, organize_photos_module: ModuleType) -> None:
         """Test provider setup with default configuration."""
         mock_logger = Mock()
         face_config = {}
@@ -738,7 +743,7 @@ class TestSetupFaceProvider:
             },
         )
 
-    def test_setup_face_provider_custom_config(self, organize_photos_module):
+    def test_setup_face_provider_custom_config(self, organize_photos_module: ModuleType) -> None:
         """Test provider setup with custom configuration."""
         mock_logger = Mock()
         face_config = {
@@ -766,7 +771,7 @@ class TestSetupFaceProvider:
             },
         )
 
-    def test_setup_face_provider_recognition_num_jitters_override(self, organize_photos_module):
+    def test_setup_face_provider_recognition_num_jitters_override(self, organize_photos_module: ModuleType) -> None:
         """Test that recognition.num_jitters overrides default num_jitters."""
         mock_logger = Mock()
         face_config = {
@@ -789,7 +794,7 @@ class TestSetupFaceProvider:
         call_args = organize_photos_module.get_provider.call_args[0][1]
         assert call_args["num_jitters"] == 10
 
-    def test_setup_face_provider_logs_config(self, organize_photos_module):
+    def test_setup_face_provider_logs_config(self, organize_photos_module: ModuleType) -> None:
         """Test that provider setup logs the configuration."""
         mock_logger = Mock()
         face_config = {}
@@ -810,7 +815,7 @@ class TestSetupFaceProvider:
 class TestSetupAuditLoggerIfEnabled:
     """Test _setup_audit_logger_if_enabled function."""
 
-    def test_setup_audit_logger_enabled(self, organize_photos_module, tmp_path):
+    def test_setup_audit_logger_enabled(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test audit logger setup when log file is specified."""
         mock_logger = Mock()
         log_file = str(tmp_path / "audit.log")
@@ -827,7 +832,7 @@ class TestSetupAuditLoggerIfEnabled:
             # Restore original value
             organize_photos_module._audit_logger = original_audit_logger
 
-    def test_setup_audit_logger_disabled(self, organize_photos_module):
+    def test_setup_audit_logger_disabled(self, organize_photos_module: ModuleType) -> None:
         """Test audit logger not set up when log file is None."""
         mock_logger = Mock()
 
@@ -844,7 +849,7 @@ class TestSetupAuditLoggerIfEnabled:
             # Restore original value
             organize_photos_module._audit_logger = original_audit_logger
 
-    def test_setup_audit_logger_failure(self, organize_photos_module):
+    def test_setup_audit_logger_failure(self, organize_photos_module: ModuleType) -> None:
         """Test audit logger setup handles failures gracefully."""
         mock_logger = Mock()
 
@@ -869,7 +874,7 @@ class TestSetupAuditLoggerIfEnabled:
 class TestMain:
     """Test main() function."""
 
-    def test_main_config_file_not_found(self, organize_photos_module, tmp_path):
+    def test_main_config_file_not_found(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 1 when config file is not found."""
         # Mock argparse to return non-existent config
         mock_args = Mock()
@@ -894,7 +899,7 @@ class TestMain:
         assert result == 1
         mock_logger.error.assert_called()
 
-    def test_main_config_validation_error(self, organize_photos_module, tmp_path):
+    def test_main_config_validation_error(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 1 when config validation fails."""
         # Create config file with invalid config (same source and destination)
         config_file = tmp_path / "config.yaml"
@@ -929,7 +934,7 @@ dropbox:
         # Should log the validation error
         mock_logger.error.assert_called()
 
-    def test_main_general_exception(self, organize_photos_module, tmp_path):
+    def test_main_general_exception(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 1 on general exception."""
         # Mock argparse
         mock_args = Mock()
@@ -957,7 +962,7 @@ dropbox:
         # Check error was logged with exc_info
         mock_logger.error.assert_called()
 
-    def test_main_no_reference_photos(self, organize_photos_module, tmp_path):
+    def test_main_no_reference_photos(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 1 when no reference photos are found."""
         # Create valid config file
         config_file = tmp_path / "config.yaml"
@@ -1014,7 +1019,7 @@ processing:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
 
-    def test_main_no_image_files(self, organize_photos_module, tmp_path):
+    def test_main_no_image_files(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 0 when no image files are found in source folder."""
         # Create valid config file
         config_file = tmp_path / "config.yaml"
@@ -1073,7 +1078,7 @@ processing:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
 
-    def test_main_successful_run_with_matches(self, organize_photos_module, tmp_path):
+    def test_main_successful_run_with_matches(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main returns 0 on successful run with matches."""
         # Create valid config file
         config_file = tmp_path / "config.yaml"
@@ -1140,7 +1145,7 @@ processing:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
 
-    def test_main_move_mode_with_full_size(self, organize_photos_module, tmp_path):
+    def test_main_move_mode_with_full_size(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
         """Test main with move mode and full-size photos."""
         # Create valid config file
         config_file = tmp_path / "config.yaml"
