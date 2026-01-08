@@ -1,4 +1,7 @@
 # mypy: disable-error-code="no-redef"
+# Note: The above directive is needed because we declare module variables (face_recognition, Image, io)
+# with Any type before the try/except block to enable test mocking via patch(). Mypy sees these as
+# redefinitions when the actual imports occur, so we disable the no-redef check for this file.
 """
 Local face recognition provider using the face_recognition library (dlib-based).
 Runs entirely offline without external API calls.
