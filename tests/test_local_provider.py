@@ -16,12 +16,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 @pytest.fixture(autouse=True)
 def mock_face_recognition_available():
     """
-    Mock FACE_RECOGNITION_AVAILABLE to True for all tests in this module.
+    Mock FACE_RECOGNITION_AVAILABLE to True and patch optional modules for all tests.
     This allows tests to run in CI environments where face_recognition is not installed.
+
+    We patch Image and io to the real modules imported at the top of this test file,
+    so that code in local_provider.py can use them even when face_recognition is not installed.
     """
-    with patch(
-        "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
-        True,
+    with (
+        patch(
+            "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
+            True,
+        ),
+        patch(
+            "scripts.face_recognizer.providers.local_provider.Image",
+            Image,
+        ),
+        patch(
+            "scripts.face_recognizer.providers.local_provider.io",
+            io,
+        ),
     ):
         yield
 
