@@ -83,7 +83,7 @@ jobs:
       continue-on-error: true
 
   coverage:
-    name: Coverage Check (90% target)
+    name: Coverage Check (95% target)
     runs-on: ubuntu-latest
 
     steps:
@@ -104,7 +104,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=90
+        pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=95
 
     - name: Upload coverage HTML report
       if: always()
@@ -262,7 +262,7 @@ jobs:
           exit 1
         fi
         if [ "${{ needs.coverage.result }}" != "success" ]; then
-          echo "❌ Coverage check failed (90% target)"
+          echo "❌ Coverage check failed (95% target)"
           exit 1
         fi
         if [ "${{ needs.security.result }}" != "success" ]; then

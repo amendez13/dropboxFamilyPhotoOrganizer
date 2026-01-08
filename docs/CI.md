@@ -94,13 +94,13 @@ pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
   - Dependency import checks
   - Configuration file validation
 
-### 3. Coverage Check (Non-Voting)
+### 3. Coverage Check (Voting)
 
-Monitors code coverage with a 90% target. This check is **non-voting** - it will not block PR merging even if coverage is below the threshold.
+Monitors code coverage with a 95% target. This check is **voting** - builds will fail if coverage is below the threshold.
 
-**Target:** 90% code coverage
+**Target:** 95% code coverage
 
-**Status:** Advisory only (does not block merges)
+**Status:** Required (blocks merges if below threshold)
 
 **Tools Used:**
 - **pytest-cov** - Coverage measurement
@@ -109,7 +109,7 @@ Monitors code coverage with a 90% target. This check is **non-voting** - it will
 **Commands:**
 ```bash
 # Run tests with coverage and fail if below threshold
-pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=90
+pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=95
 ```
 
 **Configuration:**
@@ -1028,3 +1028,26 @@ Simply mention `@claude` in a comment or issue with your request:
 - Manual trigger input for PR number in Claude Code Review workflow (`workflow_dispatch`)
 - Documentation section for Claude Code workflows in CI.md
 - Instructions for both comment-based and manual UI-based triggering
+
+### 2026-01-08 - Increase Coverage Threshold to 95%
+
+**Changed:**
+- Coverage threshold increased from 90% to 95% (issue #71)
+- Coverage check is now voting (blocks merges if below threshold)
+- Updated CI workflow name from "Coverage Check (90% target)" to "Coverage Check (95% target)"
+- Updated build status failure message to reflect 95% target
+
+**Added:**
+- Comprehensive tests for `local_provider.py` achieving 98% coverage
+- New test file `tests/test_local_provider.py` with 35 test cases covering:
+  - Provider initialization with default and custom configurations
+  - `get_provider_name()` method
+  - `validate_configuration()` method
+  - `load_reference_photos()` method with various scenarios
+  - `detect_faces()` method including image format conversions
+  - `compare_faces()` method with tolerance handling
+  - Integration workflow tests
+
+**Coverage Status:**
+- Total coverage: 99.34%
+- `local_provider.py`: 98% (only import exception handler untested)
