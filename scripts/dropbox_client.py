@@ -98,18 +98,11 @@ class DropboxClient:
             In OAuth mode, this accesses a private SDK attribute (_oauth2_access_token).
             This is necessary because the Dropbox SDK doesn't expose the current access
             token via public API. If this breaks in future SDK versions, the method
-            will gracefully return None.
+            will gracefully return None via the getattr default.
         """
         if self.auth_mode == "oauth":
-            # Access private SDK attribute with defensive fallback
-            # The SDK doesn't provide a public API for the current access token
-            try:
-                return getattr(self.dbx, "_oauth2_access_token", None)
-            except AttributeError:
-                self.logger.warning(
-                    "Unable to access SDK access token. " "This may indicate a Dropbox SDK version incompatibility."
-                )
-                return None
+            # Access private SDK attribute - returns None if not available
+            return getattr(self.dbx, "_oauth2_access_token", None)
         else:
             return self.access_token
 
