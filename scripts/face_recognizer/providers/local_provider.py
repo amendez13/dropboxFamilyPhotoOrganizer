@@ -1,3 +1,4 @@
+# mypy: disable-error-code="no-redef"
 """
 Local face recognition provider using the face_recognition library (dlib-based).
 Runs entirely offline without external API calls.
@@ -9,6 +10,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# Type declarations for optional modules - enables test mocking
+face_recognition: Any
+Image: Any
+io: Any
+
 try:
     import io
 
@@ -18,8 +24,11 @@ try:
     FACE_RECOGNITION_AVAILABLE = True
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
+    face_recognition = None
+    Image = None
+    io = None
 
-import sys
+import sys  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
