@@ -85,8 +85,6 @@ jobs:
   coverage:
     name: Coverage Check (90% target)
     runs-on: ubuntu-latest
-    # Non-voting: does not block PR merging
-    continue-on-error: true
 
     steps:
     - name: Checkout code
@@ -249,7 +247,7 @@ jobs:
   build-status:
     name: CI Status Check
     runs-on: ubuntu-latest
-    needs: [lint, test, security, validate-config]
+    needs: [lint, test, coverage, security, validate-config]
     if: always()
 
     steps:
@@ -261,6 +259,10 @@ jobs:
         fi
         if [ "${{ needs.test.result }}" != "success" ]; then
           echo "❌ Tests failed"
+          exit 1
+        fi
+        if [ "${{ needs.coverage.result }}" != "success" ]; then
+          echo "❌ Coverage check failed (90% target)"
           exit 1
         fi
         if [ "${{ needs.security.result }}" != "success" ]; then
