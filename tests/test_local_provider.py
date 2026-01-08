@@ -13,43 +13,42 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 
+@pytest.fixture(autouse=True)
+def mock_face_recognition_available():
+    """
+    Mock FACE_RECOGNITION_AVAILABLE to True for all tests in this module.
+    This allows tests to run in CI environments where face_recognition is not installed.
+    """
+    with patch(
+        "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
+        True,
+    ):
+        yield
+
+
 class TestLocalProviderImport:
     """Test import behavior when face_recognition is not available."""
 
-    def test_import_error_when_face_recognition_not_available(self):
+    def test_import_error_when_face_recognition_not_available(self, mock_face_recognition_available):
         """Test that ImportError is raised when face_recognition is not installed."""
-        from scripts.face_recognizer.providers import local_provider
-
-        # Save the original value
-        original_value = local_provider.FACE_RECOGNITION_AVAILABLE
-
-        try:
-            # Set to False to simulate face_recognition not being installed
-            local_provider.FACE_RECOGNITION_AVAILABLE = False
+        # Override the autouse fixture by patching with False
+        with patch(
+            "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
+            False,
+        ):
+            from scripts.face_recognizer.providers import local_provider
 
             # The provider should raise ImportError when instantiated
             with pytest.raises(ImportError) as exc_info:
                 local_provider.LocalFaceRecognitionProvider({})
 
             assert "face_recognition library not installed" in str(exc_info.value)
-        finally:
-            # Restore original value
-            local_provider.FACE_RECOGNITION_AVAILABLE = original_value
 
 
 class TestLocalFaceRecognitionProviderInit:
     """Test LocalFaceRecognitionProvider initialization."""
 
-    @pytest.fixture
-    def mock_face_recognition(self):
-        """Mock face_recognition module."""
-        with patch(
-            "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
-            True,
-        ):
-            yield
-
-    def test_init_with_default_config(self, mock_face_recognition):
+    def test_init_with_default_config(self):
         """Test initialization with default configuration values."""
         from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
@@ -61,7 +60,7 @@ class TestLocalFaceRecognitionProviderInit:
         assert provider.default_tolerance == 0.6
         assert provider.reference_encodings == []
 
-    def test_init_with_custom_config(self, mock_face_recognition):
+    def test_init_with_custom_config(self):
         """Test initialization with custom configuration values."""
         from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
@@ -78,7 +77,7 @@ class TestLocalFaceRecognitionProviderInit:
         assert provider.encoding_model == "large"
         assert provider.default_tolerance == 0.4
 
-    def test_init_stores_config(self, mock_face_recognition):
+    def test_init_stores_config(self):
         """Test that config is stored in parent class."""
         from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
@@ -137,24 +136,20 @@ class TestValidateConfiguration:
 
     def test_validate_configuration_face_recognition_unavailable(self):
         """Test validation fails when face_recognition is not available."""
-        from scripts.face_recognizer.providers import local_provider
+        from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider
 
-        # Temporarily set FACE_RECOGNITION_AVAILABLE to False
-        original_value = local_provider.FACE_RECOGNITION_AVAILABLE
+        # Create provider first (with FACE_RECOGNITION_AVAILABLE=True from autouse fixture)
+        provider = LocalFaceRecognitionProvider({})
 
-        try:
-            # We can't easily test this path without disrupting the import
-            # Instead, test the validation logic directly by checking the method
-            provider = local_provider.LocalFaceRecognitionProvider({})
-
-            # Mock the availability flag on the module level
-            local_provider.FACE_RECOGNITION_AVAILABLE = False
+        # Then patch to False and call validate_configuration
+        with patch(
+            "scripts.face_recognizer.providers.local_provider.FACE_RECOGNITION_AVAILABLE",
+            False,
+        ):
             is_valid, error = provider.validate_configuration()
 
             assert is_valid is False
             assert "face_recognition library not installed" in error
-        finally:
-            local_provider.FACE_RECOGNITION_AVAILABLE = original_value
 
 
 class TestLoadReferencePhotos:
