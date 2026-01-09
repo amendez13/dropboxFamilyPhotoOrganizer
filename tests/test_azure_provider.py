@@ -3,12 +3,127 @@
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import numpy as np
 import pytest
 
 # Add scripts directory to path for local imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+
+class TestRetryWithBackoff:
+    """Test retry_with_backoff decorator."""
+
+    def test_retry_succeeds_on_first_attempt(self):
+        """Test function succeeds without retry."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def success_func():
+            nonlocal call_count
+            call_count += 1
+            return "success"
+
+        result = success_func()
+
+        assert result == "success"
+        assert call_count == 1
+
+    def test_retry_on_rate_limit_error(self):
+        """Test retry on 429 rate limit error."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def rate_limited_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise Exception("Error 429: Rate limit exceeded")
+            return "success"
+
+        result = rate_limited_func()
+
+        assert result == "success"
+        assert call_count == 3
+
+    def test_retry_on_timeout_error(self):
+        """Test retry on timeout error."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def timeout_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise Exception("Connection timeout")
+            return "success"
+
+        result = timeout_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_retry_on_connection_error(self):
+        """Test retry on connection error."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def connection_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise Exception("Connection refused")
+            return "success"
+
+        result = connection_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_no_retry_on_non_retryable_error(self):
+        """Test that non-retryable errors are raised immediately."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def auth_error_func():
+            nonlocal call_count
+            call_count += 1
+            raise Exception("Authentication failed: invalid API key")
+
+        with pytest.raises(Exception) as exc_info:
+            auth_error_func()
+
+        assert "Authentication failed" in str(exc_info.value)
+        assert call_count == 1  # No retries for auth errors
+
+    def test_max_retries_exceeded(self):
+        """Test that error is raised after max retries."""
+        from scripts.face_recognizer.providers.azure_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=2, base_delay=0.01)
+        def always_rate_limited():
+            nonlocal call_count
+            call_count += 1
+            raise Exception("Error 429: Rate limit exceeded")
+
+        with pytest.raises(Exception) as exc_info:
+            always_rate_limited()
+
+        assert "429" in str(exc_info.value)
+        assert call_count == 3  # Initial + 2 retries
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +148,8 @@ def mock_azure_available():
     mock_training_status_type = MagicMock()
     mock_training_status_type.succeeded = "succeeded"
     mock_training_status_type.failed = "failed"
+    mock_training_status_type.running = "running"
+    mock_training_status_type.nonstarted = "nonstarted"
     mock_credentials_class = MagicMock()
 
     # Inject mocks
@@ -417,6 +534,85 @@ class TestLoadReferencePhotos:
 
         assert "timed out" in str(exc_info.value)
 
+    def test_load_reference_photos_training_running_then_success(self, provider, mock_image_file, mock_azure_available):
+        """Test training that starts running then succeeds."""
+        # Setup mocks
+        provider.client.person_group.get.return_value = MagicMock()
+        provider.client.person_group_person.list.return_value = []
+        mock_person = MagicMock()
+        mock_person.person_id = "test-person-id"
+        provider.client.person_group_person.create.return_value = mock_person
+        provider.client.person_group_person.add_face_from_stream.return_value = MagicMock()
+
+        # Mock training status - first running, then succeeded
+        mock_status_running = MagicMock()
+        mock_status_running.status = mock_azure_available["TrainingStatusType"].running
+        mock_status_success = MagicMock()
+        mock_status_success.status = mock_azure_available["TrainingStatusType"].succeeded
+
+        provider.client.person_group.get_training_status.side_effect = [
+            mock_status_running,
+            mock_status_success,
+        ]
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+        # Verify training status was checked multiple times
+        assert provider.client.person_group.get_training_status.call_count == 2
+
+    def test_load_reference_photos_training_nonstarted_then_success(self, provider, mock_image_file, mock_azure_available):
+        """Test training that starts as nonstarted then succeeds."""
+        # Setup mocks
+        provider.client.person_group.get.return_value = MagicMock()
+        provider.client.person_group_person.list.return_value = []
+        mock_person = MagicMock()
+        mock_person.person_id = "test-person-id"
+        provider.client.person_group_person.create.return_value = mock_person
+        provider.client.person_group_person.add_face_from_stream.return_value = MagicMock()
+
+        # Mock training status - first nonstarted, then succeeded
+        mock_status_nonstarted = MagicMock()
+        mock_status_nonstarted.status = mock_azure_available["TrainingStatusType"].nonstarted
+        mock_status_success = MagicMock()
+        mock_status_success.status = mock_azure_available["TrainingStatusType"].succeeded
+
+        provider.client.person_group.get_training_status.side_effect = [
+            mock_status_nonstarted,
+            mock_status_success,
+        ]
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+
+    def test_load_reference_photos_training_unexpected_status(self, provider, mock_image_file, mock_azure_available):
+        """Test training with unexpected status still continues polling."""
+        # Setup mocks
+        provider.client.person_group.get.return_value = MagicMock()
+        provider.client.person_group_person.list.return_value = []
+        mock_person = MagicMock()
+        mock_person.person_id = "test-person-id"
+        provider.client.person_group_person.create.return_value = mock_person
+        provider.client.person_group_person.add_face_from_stream.return_value = MagicMock()
+
+        # Mock training status - unexpected status, then succeeded
+        mock_status_unexpected = MagicMock()
+        mock_status_unexpected.status = "unexpected_status"
+        mock_status_success = MagicMock()
+        mock_status_success.status = mock_azure_available["TrainingStatusType"].succeeded
+
+        provider.client.person_group.get_training_status.side_effect = [
+            mock_status_unexpected,
+            mock_status_success,
+        ]
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+        # Verify training status was checked multiple times (didn't get stuck)
+        assert provider.client.person_group.get_training_status.call_count == 2
+
 
 class TestDetectFaces:
     """Test detect_faces method."""
@@ -497,6 +693,35 @@ class TestDetectFaces:
 
         assert len(faces) == 1
         assert faces[0].source == "unknown"
+
+    def test_detect_faces_stores_uuid_object(self, provider, test_image_bytes):
+        """Test that detect_faces stores UUID objects directly."""
+        test_uuid = UUID("12345678-1234-5678-1234-567812345678")
+        mock_face = MagicMock()
+        mock_face.face_id = test_uuid
+        provider.client.face.detect_with_stream.return_value = [mock_face]
+
+        faces = provider.detect_faces(test_image_bytes, source="test.jpg")
+
+        assert len(faces) == 1
+        # The UUID should be stored directly (not converted to string)
+        assert faces[0].encoding[0] == test_uuid
+
+    def test_detect_faces_retry_on_rate_limit(self, provider, test_image_bytes):
+        """Test that detect_faces retries on rate limit errors."""
+        mock_face = MagicMock()
+        mock_face.face_id = "face-uuid-12345"
+
+        # First call fails with rate limit, second succeeds
+        provider.client.face.detect_with_stream.side_effect = [
+            Exception("Error 429: Rate limit exceeded"),
+            [mock_face],
+        ]
+
+        faces = provider.detect_faces(test_image_bytes, source="test.jpg")
+
+        assert len(faces) == 1
+        assert provider.client.face.detect_with_stream.call_count == 2
 
 
 class TestCompareFaces:
@@ -612,6 +837,51 @@ class TestCompareFaces:
         # Verify custom tolerance was passed to API
         call_kwargs = provider_with_person.client.face.identify.call_args[1]
         assert call_kwargs["confidence_threshold"] == 0.8
+
+    def test_compare_faces_with_uuid_object(self, provider_with_person):
+        """Test comparing with UUID object in encoding."""
+        from scripts.face_recognizer.base_provider import FaceEncoding
+
+        test_uuid = UUID("12345678-1234-5678-1234-567812345678")
+        face_encoding = FaceEncoding(
+            encoding=np.array([test_uuid], dtype=object),
+            source="test.jpg",
+        )
+
+        mock_candidate = MagicMock()
+        mock_candidate.person_id = "target-person-id"
+        mock_candidate.confidence = 0.85
+
+        mock_result = MagicMock()
+        mock_result.candidates = [mock_candidate]
+        provider_with_person.client.face.identify.return_value = [mock_result]
+
+        result = provider_with_person.compare_faces(face_encoding)
+
+        assert result.is_match is True
+        # Verify UUID was converted to string for API call
+        call_args = provider_with_person.client.face.identify.call_args[0]
+        assert call_args[0] == [str(test_uuid)]
+
+    def test_compare_faces_retry_on_rate_limit(self, provider_with_person, test_face_encoding):
+        """Test that compare_faces retries on rate limit errors."""
+        mock_candidate = MagicMock()
+        mock_candidate.person_id = "target-person-id"
+        mock_candidate.confidence = 0.85
+
+        mock_result = MagicMock()
+        mock_result.candidates = [mock_candidate]
+
+        # First call fails with rate limit, second succeeds
+        provider_with_person.client.face.identify.side_effect = [
+            Exception("Error 429: Rate limit exceeded"),
+            [mock_result],
+        ]
+
+        result = provider_with_person.compare_faces(test_face_encoding)
+
+        assert result.is_match is True
+        assert provider_with_person.client.face.identify.call_count == 2
 
 
 class TestAzureProviderIntegration:
