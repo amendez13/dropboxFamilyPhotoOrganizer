@@ -1,0 +1,13 @@
+# Azure Face Recognition Provider Dependencies
+# Install with: pip install -r requirements-azure.txt
+#
+# These dependencies are optional and only needed if you want to use
+# the Azure Face API provider for face recognition.
+#
+# For the local face recognition provider (default), these are not required.
+
+# Azure Cognitive Services Face API client
+azure-cognitiveservices-vision-face>=0.6.0
+
+# Azure REST authentication
+msrest>=0.7.0

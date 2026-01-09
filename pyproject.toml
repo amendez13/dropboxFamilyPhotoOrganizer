@@ -57,7 +57,6 @@ omit = [
     "scripts/test_dropbox_connection.py",
     # Cloud provider implementations (require external services)
     "scripts/face_recognizer/providers/aws_provider.py",
-    "scripts/face_recognizer/providers/azure_provider.py",
 ]
 
 [tool.coverage.report]

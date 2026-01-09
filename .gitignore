@@ -60,3 +60,6 @@ coverage.xml
 # Temporary files
 temp/
 tmp/
+
+# Code review files (local only)
+.code-review-*.md
