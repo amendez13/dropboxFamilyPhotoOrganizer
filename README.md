@@ -26,7 +26,11 @@ Follow the detailed instructions in [docs/DROPBOX_SETUP.md](docs/DROPBOX_SETUP.m
 
 ### 2. Install Dependencies
 
-#### Face Recognition Setup (macOS)
+#### Face Recognition Setup
+
+The application supports multiple face recognition providers:
+
+**Option A: Local Provider (Default)** - Runs offline, no API costs
 
 For macOS users, use the automated installation script:
 
@@ -35,6 +39,14 @@ For macOS users, use the automated installation script:
 ```
 
 This script will install all required dependencies including dlib, face_recognition, and their system-level requirements. For manual installation or other operating systems, see [docs/FACE_RECOGNITION_LOCAL_SETUP.md](docs/FACE_RECOGNITION_LOCAL_SETUP.md).
+
+**Option B: Azure Face API** - Cloud-based, high accuracy
+
+```bash
+pip install -r requirements-azure.txt
+```
+
+See [docs/AZURE_FACE_RECOGNITION_SETUP.md](docs/AZURE_FACE_RECOGNITION_SETUP.md) for Azure account setup and configuration.
 
 #### Standard Installation
 

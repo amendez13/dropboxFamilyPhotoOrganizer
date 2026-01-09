@@ -46,6 +46,15 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - First training run with reference photos
 - Parameter tuning and troubleshooting
 
+**[AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md)**
+- Azure Face API provider setup
+- Creating an Azure account and Face API resource
+- Getting API keys and endpoints
+- Python dependency installation
+- Configuration and Person Groups
+- API usage, costs, and rate limits
+- Security and privacy considerations
+
 ---
 
 ## Architecture
@@ -117,6 +126,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [README.md](../README.md) | Getting started, installation, usage | All users |
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
+| [AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md) | Azure Face API setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |

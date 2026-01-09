@@ -197,7 +197,7 @@ face_recognition:
 
 ## Provider Implementations
 
-### Local Provider (`local_provider.py`)
+### Local Provider (`local_provider.py`) ✅ Implemented
 
 **Technology**: `face_recognition` library (dlib-based)
 
@@ -260,7 +260,7 @@ face_recognition:
 
 ---
 
-### Azure Provider (`azure_provider.py`)
+### Azure Provider (`azure_provider.py`) ✅ Implemented
 
 **Technology**: Azure Cognitive Services Face API
 
@@ -270,6 +270,7 @@ face_recognition:
 - ✅ Pre-trained models
 - ✅ Good for multi-person scenarios
 - ✅ Face identification (not just verification)
+- ✅ No local dependencies (no dlib/cmake required)
 
 **Cons**:
 - ❌ Requires Azure account
@@ -286,6 +287,7 @@ face_recognition:
     azure_endpoint: "https://eastus.api.cognitive.microsoft.com"
     person_group_id: "dropbox-photo-organizer"
     confidence_threshold: 0.5
+    training_timeout: 300  # seconds
 ```
 
 **Best For**: Enterprise deployments, scenarios requiring persistent face database, multi-person identification
@@ -295,10 +297,12 @@ face_recognition:
   1. Create Person Group
   2. Create Person
   3. Add faces to Person
-  4. Train Person Group (async)
+  4. Train Person Group (async with timeout)
 - Per photo:
   1. Detect faces
   2. Identify against Person Group
+
+**Setup Guide**: See [AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md) for detailed instructions.
 
 ---
 

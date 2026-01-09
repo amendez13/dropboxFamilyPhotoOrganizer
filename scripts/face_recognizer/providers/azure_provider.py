@@ -3,8 +3,10 @@ Azure Face API face recognition provider.
 Uses Azure Cognitive Services Face API for face detection and identification.
 """
 
+import io
 import logging
 import os
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,7 +21,8 @@ try:
 except ImportError:
     AZURE_AVAILABLE = False
 
-import sys
+# Default training timeout in seconds (5 minutes)
+DEFAULT_TRAINING_TIMEOUT = 300
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -72,7 +75,8 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
         self.person_group_id = config.get("person_group_id", "dropbox-photo-organizer")
         self.confidence_threshold = config.get("confidence_threshold", 0.5)
-        self.person_id = None  # Will be created when loading reference photos
+        self.training_timeout = config.get("training_timeout", DEFAULT_TRAINING_TIMEOUT)
+        self.person_id: Optional[str] = None  # Will be created when loading reference photos
 
     def get_provider_name(self) -> str:
         """Get provider name."""
@@ -124,7 +128,14 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             raise
 
     def _add_reference_face(self, photo_path: str) -> bool:
-        """Add a single reference face from photo path."""
+        """Add a single reference face from photo path.
+
+        Args:
+            photo_path: Path to the reference photo file
+
+        Returns:
+            True if face was added successfully, False otherwise
+        """
         if not os.path.exists(photo_path):
             self.logger.warning(f"Reference photo not found: {photo_path}")
             return False
@@ -133,13 +144,19 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             with open(photo_path, "rb") as f:
                 image_data = f.read()
 
-            # Add face to person
+            # Wrap in BytesIO stream for Azure SDK
+            image_stream = io.BytesIO(image_data)
+
+            # Add face to person using latest detection model
             self.client.person_group_person.add_face_from_stream(
-                self.person_group_id, self.person_id, image_data, detection_model="detection_03"  # Latest model
+                self.person_group_id,
+                self.person_id,
+                image_stream,
+                detection_model="detection_03",
             )
 
-            # Store as FaceEncoding for compatibility
-            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path))  # Placeholder
+            # Store as FaceEncoding for compatibility (empty encoding, Azure handles storage)
+            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path))
 
             self.logger.info(f"Added reference face from: {photo_path}")
             return True
@@ -149,15 +166,28 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             return False
 
     def _train_person_group(self) -> None:
-        """Train the person group and wait for completion."""
+        """Train the person group and wait for completion.
+
+        Raises:
+            TimeoutError: If training exceeds configured timeout
+            Exception: If training fails
+        """
         self.logger.info("Training Azure Face model...")
         self.client.person_group.train(self.person_group_id)
 
-        # Wait for training to complete
+        # Wait for training to complete with timeout
+        start_time = time.time()
         while True:
+            elapsed = time.time() - start_time
+            if elapsed > self.training_timeout:
+                raise TimeoutError(
+                    f"Training timed out after {self.training_timeout} seconds. "
+                    "Increase 'training_timeout' in config or check Azure portal for status."
+                )
+
             training_status = self.client.person_group.get_training_status(self.person_group_id)
             if training_status.status == TrainingStatusType.succeeded:
-                self.logger.info("Training completed successfully")
+                self.logger.info(f"Training completed successfully in {elapsed:.1f} seconds")
                 break
             elif training_status.status == TrainingStatusType.failed:
                 raise Exception(f"Training failed: {training_status.message}")
@@ -207,14 +237,25 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             List of detected face encodings
         """
         try:
+            # Wrap bytes in BytesIO stream for Azure SDK
+            image_stream = io.BytesIO(image_data)
             detected_faces = self.client.face.detect_with_stream(
-                image_data, detection_model="detection_03", recognition_model="recognition_04", return_face_id=True
+                image_stream,
+                detection_model="detection_03",
+                recognition_model="recognition_04",
+                return_face_id=True,
             )
 
             face_encodings = []
             for face in detected_faces:
+                # Store face_id as string in a numpy array with object dtype
+                # This preserves the UUID string for later retrieval
                 face_encodings.append(
-                    FaceEncoding(encoding=np.array([face.face_id]), source=source, confidence=None)  # Store face_id
+                    FaceEncoding(
+                        encoding=np.array([str(face.face_id)], dtype=object),
+                        source=source,
+                        confidence=None,
+                    )
                 )
 
             return face_encodings
@@ -228,7 +269,7 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
         Compare face against reference using Azure Face API.
 
         Args:
-            face_encoding: Face encoding (contains face_id)
+            face_encoding: Face encoding (contains face_id as string in encoding array)
             tolerance: Confidence threshold (0-1)
 
         Returns:
@@ -238,22 +279,30 @@ class AzureFaceRecognitionProvider(BaseFaceRecognitionProvider):
             tolerance = self.confidence_threshold
 
         if not self.person_id:
+            self.logger.warning("No person_id set - cannot compare faces")
             return FaceMatch(is_match=False, confidence=0.0, distance=1.0)
 
         try:
-            # Identify face
-            face_id = face_encoding.encoding[0]  # Extract face_id
+            # Extract face_id string from encoding array
+            face_id = str(face_encoding.encoding[0])
 
-            results = self.client.face.identify([face_id], self.person_group_id, confidence_threshold=tolerance)
+            results = self.client.face.identify(
+                [face_id],
+                self.person_group_id,
+                confidence_threshold=tolerance,
+            )
 
             if results and results[0].candidates:
                 # Check if identified as our target person
                 for candidate in results[0].candidates:
-                    if candidate.person_id == self.person_id:
-                        confidence = candidate.confidence
+                    if str(candidate.person_id) == str(self.person_id):
+                        confidence = float(candidate.confidence)
 
                         return FaceMatch(
-                            is_match=True, confidence=confidence, distance=1.0 - confidence, matched_encoding=None
+                            is_match=True,
+                            confidence=confidence,
+                            distance=1.0 - confidence,
+                            matched_encoding=None,
                         )
 
             return FaceMatch(is_match=False, confidence=0.0, distance=1.0)
