@@ -11,6 +11,180 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 
+class TestRetryWithBackoff:
+    """Test retry_with_backoff decorator."""
+
+    def test_retry_succeeds_on_first_attempt(self):
+        """Test function succeeds without retry."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def success_func():
+            nonlocal call_count
+            call_count += 1
+            return "success"
+
+        result = success_func()
+
+        assert result == "success"
+        assert call_count == 1
+
+    def test_retry_on_throttling_exception(self, mock_aws_available):
+        """Test retry on AWS ThrottlingException."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def throttled_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                error_response = {"Error": {"Code": "ThrottlingException"}}
+                error = ClientError(error_response, "DetectFaces")
+                error.response = error_response
+                raise error
+            return "success"
+
+        result = throttled_func()
+
+        assert result == "success"
+        assert call_count == 3
+
+    def test_retry_on_provisioned_throughput_exceeded(self, mock_aws_available):
+        """Test retry on ProvisionedThroughputExceededException."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def throughput_exceeded_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                error_response = {"Error": {"Code": "ProvisionedThroughputExceededException"}}
+                error = ClientError(error_response, "CompareFaces")
+                error.response = error_response
+                raise error
+            return "success"
+
+        result = throughput_exceeded_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_retry_on_service_unavailable(self, mock_aws_available):
+        """Test retry on ServiceUnavailableException."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def service_unavailable_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                error_response = {"Error": {"Code": "ServiceUnavailableException"}}
+                error = ClientError(error_response, "DetectFaces")
+                error.response = error_response
+                raise error
+            return "success"
+
+        result = service_unavailable_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_retry_on_internal_server_error(self, mock_aws_available):
+        """Test retry on InternalServerError."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def internal_error_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                error_response = {"Error": {"Code": "InternalServerError"}}
+                error = ClientError(error_response, "CompareFaces")
+                error.response = error_response
+                raise error
+            return "success"
+
+        result = internal_error_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_retry_on_timeout_error(self):
+        """Test retry on timeout error."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def timeout_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise Exception("Connection timeout")
+            return "success"
+
+        result = timeout_func()
+
+        assert result == "success"
+        assert call_count == 2
+
+    def test_no_retry_on_non_retryable_error(self, mock_aws_available):
+        """Test that non-retryable errors are raised immediately."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=3, base_delay=0.01)
+        def auth_error_func():
+            nonlocal call_count
+            call_count += 1
+            error_response = {"Error": {"Code": "UnrecognizedClientException"}}
+            error = ClientError(error_response, "DetectFaces")
+            error.response = error_response
+            raise error
+
+        with pytest.raises(Exception):
+            auth_error_func()
+
+        assert call_count == 1  # No retries for auth errors
+
+    def test_max_retries_exceeded(self, mock_aws_available):
+        """Test that error is raised after max retries."""
+        from scripts.face_recognizer.providers.aws_provider import retry_with_backoff
+
+        call_count = 0
+        ClientError = mock_aws_available["ClientError"]
+
+        @retry_with_backoff(max_retries=2, base_delay=0.01)
+        def always_throttled():
+            nonlocal call_count
+            call_count += 1
+            error_response = {"Error": {"Code": "ThrottlingException"}}
+            error = ClientError(error_response, "DetectFaces")
+            error.response = error_response
+            raise error
+
+        with pytest.raises(Exception):
+            always_throttled()
+
+        assert call_count == 3  # Initial + 2 retries
+
+
 @pytest.fixture(autouse=True)
 def mock_aws_available():
     """
