@@ -7,29 +7,25 @@ Local face recognition provider using the face_recognition library (dlib-based).
 Runs entirely offline without external API calls.
 """
 
+# These modules should always be available (required dependencies)
+import io
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from PIL import Image
 
-# Type declarations for optional modules - enables test mocking
+# Type declaration for optional face_recognition module - enables test mocking
 face_recognition: Any
-Image: Any
-io: Any
 
 try:
-    import io
-
     import face_recognition
-    from PIL import Image
 
     FACE_RECOGNITION_AVAILABLE = True
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
     face_recognition = None
-    Image = None
-    io = None
 
 import sys  # noqa: E402
 

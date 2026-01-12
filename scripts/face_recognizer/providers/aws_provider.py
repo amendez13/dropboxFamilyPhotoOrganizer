@@ -5,7 +5,9 @@ Uses AWS Rekognition for face detection and comparison.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
 
 import numpy as np
 
@@ -17,7 +19,98 @@ try:
 except ImportError:
     AWS_AVAILABLE = False
 
-import sys
+# Retry configuration
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BASE_DELAY = 1.0  # seconds
+DEFAULT_MAX_DELAY = 30.0  # seconds
+
+T = TypeVar("T")
+
+
+def retry_with_backoff(
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    base_delay: float = DEFAULT_BASE_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+    retryable_exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """
+    Decorator for retrying functions with exponential backoff.
+
+    Handles transient failures like throttling and service errors.
+    AWS-specific retryable error codes:
+    - ThrottlingException: Rate limit exceeded
+    - ProvisionedThroughputExceededException: Throughput exceeded
+    - ServiceUnavailableException: Temporary service issue
+    - InternalServerError: AWS internal error
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay between retries in seconds
+        max_delay: Maximum delay between retries in seconds
+        retryable_exceptions: Tuple of exception types to retry on
+    """
+
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            logger = logging.getLogger(__name__)
+            last_exception: Optional[BaseException] = None
+
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except retryable_exceptions as e:
+                    last_exception = e
+
+                    # Check if it's a retryable AWS error
+                    is_retryable = False
+                    error_str = str(e).lower()
+
+                    # AWS Rekognition specific error codes
+                    if isinstance(e, ClientError):
+                        error_code = e.response.get("Error", {}).get("Code", "")
+                        is_retryable = error_code in [
+                            "ThrottlingException",
+                            "ProvisionedThroughputExceededException",
+                            "ServiceUnavailableException",
+                            "InternalServerError",
+                        ]
+                    else:
+                        # Check for retryable patterns in error message
+                        is_retryable = any(
+                            pattern in error_str
+                            for pattern in [
+                                "throttl",
+                                "rate limit",
+                                "timeout",
+                                "connection",
+                                "temporary",
+                                "service unavailable",
+                            ]
+                        )
+
+                    if attempt < max_retries and is_retryable:
+                        delay = min(base_delay * (2**attempt), max_delay)
+                        logger.warning(
+                            f"Retryable error in {func.__name__} (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                            f"Retrying in {delay:.1f}s..."
+                        )
+                        time.sleep(delay)
+                    else:
+                        # Non-retryable error or max retries exceeded
+                        raise
+
+            # Should not reach here, but raise last exception if we do
+            if last_exception:
+                raise last_exception
+            raise RuntimeError("Unexpected state in retry logic")
+
+        return wrapper
+
+    return decorator
+
+
+import sys  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -121,8 +214,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 with open(photo_path, "rb") as f:
                     image_bytes = f.read()
 
-                # Verify image has faces
-                response = self.client.detect_faces(Image={"Bytes": image_bytes}, Attributes=["DEFAULT"])
+                # Verify image has faces with retry support
+                response = self._verify_reference_photo_with_retry(image_bytes)
 
                 if not response["FaceDetails"]:
                     self.logger.warning(f"No faces found in reference photo: {photo_path}")
@@ -146,6 +239,12 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         self.logger.info(f"Loaded {len(self.reference_images)} reference photo(s)")
         return len(self.reference_images)
 
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
+    def _verify_reference_photo_with_retry(self, image_bytes: bytes) -> Dict[str, Any]:
+        """Internal method for verifying reference photos with retry support."""
+        response: Dict[str, Any] = self.client.detect_faces(Image={"Bytes": image_bytes}, Attributes=["DEFAULT"])
+        return response
+
     def detect_faces(self, image_data: bytes, source: str = "unknown") -> List[FaceEncoding]:
         """
         Detect faces using AWS Rekognition.
@@ -158,31 +257,33 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             List of detected face encodings (empty encodings for AWS)
         """
         try:
-            response = self.client.detect_faces(Image={"Bytes": image_data}, Attributes=["DEFAULT"])
-
-            face_encodings = []
-            for face_detail in response["FaceDetails"]:
-                # Extract confidence
-                confidence = face_detail["Confidence"]
-
-                # Create FaceEncoding (encoding array is empty for AWS)
-                face_encodings.append(
-                    FaceEncoding(
-                        encoding=np.array([]),  # AWS doesn't provide encodings
-                        source=source,
-                        confidence=confidence / 100.0,  # Convert to 0-1 range
-                        bounding_box=None,  # AWS uses different format
-                    )
-                )
-
+            face_encodings = self._detect_faces_with_retry(image_data, source)
             return face_encodings
-
-        except ClientError as e:
-            self.logger.error(f"AWS Rekognition error for {source}: {e}")
-            return []
         except Exception as e:
             self.logger.error(f"Error detecting faces in {source}: {e}")
             return []
+
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
+    def _detect_faces_with_retry(self, image_data: bytes, source: str) -> List[FaceEncoding]:
+        """Internal method for face detection with retry support."""
+        response = self.client.detect_faces(Image={"Bytes": image_data}, Attributes=["DEFAULT"])
+
+        face_encodings = []
+        for face_detail in response["FaceDetails"]:
+            # Extract confidence
+            confidence = face_detail["Confidence"]
+
+            # Create FaceEncoding (encoding array is empty for AWS)
+            face_encodings.append(
+                FaceEncoding(
+                    encoding=np.array([]),  # AWS doesn't provide encodings
+                    source=source,
+                    confidence=confidence / 100.0,  # Convert to 0-1 range
+                    bounding_box=None,  # AWS uses different format
+                )
+            )
+
+        return face_encodings
 
     def compare_faces(self, face_encoding: FaceEncoding, tolerance: Optional[float] = None) -> FaceMatch:
         """
@@ -227,9 +328,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         # Compare against each reference image
         for ref_image in self.reference_images:
             try:
-                response = self.client.compare_faces(
-                    SourceImage={"Bytes": ref_image}, TargetImage={"Bytes": image_data}, SimilarityThreshold=tolerance
-                )
+                response = self._compare_faces_with_retry(ref_image, image_data, tolerance)
 
                 # Count all faces in target image
                 total_faces = max(total_faces, len(response.get("UnmatchedFaces", [])) + len(response.get("FaceMatches", [])))
@@ -248,8 +347,6 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                         )
                     )
 
-            except ClientError as e:
-                self.logger.error(f"AWS compare_faces error for {source}: {e}")
             except Exception as e:
                 self.logger.error(f"Error comparing faces for {source}: {e}")
 
@@ -257,3 +354,11 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         unique_matches = matches[:1] if matches else []  # Take best match
 
         return unique_matches, total_faces
+
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
+    def _compare_faces_with_retry(self, ref_image: bytes, image_data: bytes, tolerance: float) -> Dict[str, Any]:
+        """Internal method for compare_faces API call with retry support."""
+        response: Dict[str, Any] = self.client.compare_faces(
+            SourceImage={"Bytes": ref_image}, TargetImage={"Bytes": image_data}, SimilarityThreshold=tolerance
+        )
+        return response

@@ -48,6 +48,14 @@ pip install -r requirements-azure.txt
 
 See [docs/AZURE_FACE_RECOGNITION_SETUP.md](docs/AZURE_FACE_RECOGNITION_SETUP.md) for Azure account setup and configuration.
 
+**Option C: AWS Rekognition** - Cloud-based, highly scalable
+
+```bash
+pip install -r requirements-aws.txt
+```
+
+See [docs/AWS_FACE_RECOGNITION_SETUP.md](docs/AWS_FACE_RECOGNITION_SETUP.md) for AWS account setup and configuration.
+
 #### Standard Installation
 
 ```bash

@@ -55,6 +55,14 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - API usage, costs, and rate limits
 - Security and privacy considerations
 
+**[AWS_FACE_RECOGNITION_SETUP.md](AWS_FACE_RECOGNITION_SETUP.md)**
+- AWS Rekognition provider setup
+- Creating an AWS account and IAM user
+- IAM policy configuration with minimum permissions
+- Three credential options (config file, AWS CLI, IAM roles)
+- API usage, costs, and rate limits
+- Troubleshooting and security best practices
+
 ---
 
 ## Architecture
@@ -127,6 +135,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
 | [AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md) | Azure Face API setup | All users |
+| [AWS_FACE_RECOGNITION_SETUP.md](AWS_FACE_RECOGNITION_SETUP.md) | AWS Rekognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |
