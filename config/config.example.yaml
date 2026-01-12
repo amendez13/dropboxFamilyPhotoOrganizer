@@ -56,13 +56,13 @@ face_recognition:
     recognition:
       num_jitters: 1   # 1-10 for speed when processing Dropbox photos
 
-  # AWS Rekognition settings (only needed if provider is 'aws')
+  # AWS Rekognition Provider
   aws:
-    # AWS credentials (optional if using AWS CLI configuration)
-    # aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
-    # aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
+    # AWS credentials (optional if using AWS CLI or IAM role)
+    # aws_access_key_id: "YOUR_ACCESS_KEY"
+    # aws_secret_access_key: "YOUR_SECRET_KEY"
     aws_region: "us-east-1"
-    similarity_threshold: 80.0  # Percentage (0-100)
+    similarity_threshold: 80.0  # 0-100 percentage
 
   # Azure Face API settings (only needed if provider is 'azure')
   azure:
