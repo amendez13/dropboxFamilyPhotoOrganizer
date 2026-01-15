@@ -63,6 +63,12 @@ face_recognition:
     # aws_secret_access_key: "YOUR_SECRET_KEY"
     aws_region: "us-east-1"
     similarity_threshold: 80.0  # 0-100 percentage
+    # Optional: store reference faces in a collection to avoid re-indexing each run
+    # use_face_collection: false
+    # face_collection_id: "family-collection"
+    # collection_create_if_missing: true
+    # collection_skip_existing: true
+    # collection_max_faces: 5
 
   # Azure Face API settings (only needed if provider is 'azure')
   azure:

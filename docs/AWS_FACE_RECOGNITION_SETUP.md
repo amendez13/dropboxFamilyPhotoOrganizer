@@ -233,6 +233,36 @@ face_recognition:
     similarity_threshold: 80.0
 ```
 
+### Optional: Use Face Collections (Persistent References)
+
+Face collections let Rekognition store face embeddings once and reuse them across runs.
+This avoids re-indexing reference photos each time you run the pipeline.
+
+1. **Create a collection (one-time)**:
+   ```bash
+   aws rekognition create-collection --collection-id family-collection
+   ```
+
+2. **Enable collections in config** (under `face_recognition.aws`):
+   ```yaml
+aws:
+  use_face_collection: true
+  face_collection_id: "family-collection"
+  collection_create_if_missing: true
+  collection_skip_existing: true
+  collection_max_faces: 5
+   ```
+
+3. **Run the organizer**:
+   - The first run indexes reference photos into the collection.
+   - Subsequent runs reuse the collection without re-uploading reference photos.
+
+Notes:
+- Collections store face feature data, not images.
+- `search_faces_by_image` evaluates the largest face in a target image.
+  For group shots, ensure the target face is prominent or consider using full-size photos.
+- External image IDs default to the reference photo filename (duplicates get a short hash suffix).
+
 ### Credential Options
 
 AWS Rekognition supports three authentication methods (in order of precedence):
