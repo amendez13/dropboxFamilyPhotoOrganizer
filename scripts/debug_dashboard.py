@@ -11,12 +11,14 @@ import argparse
 import base64
 import glob
 import html
+import json
 import logging
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -37,6 +39,13 @@ class ImageEntry:
     num_matches: int
     total_faces: int
     thumbnail_base64: str
+
+
+@dataclass
+class CachePayload:
+    cache_key: str
+    generated_at: str
+    entries: List[ImageEntry]
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -69,6 +78,81 @@ def list_image_files(
         if any(path_lower.endswith(ext.lower()) for ext in image_extensions):
             image_files.append(entry.path_display)
     return image_files
+
+
+def build_cache_key(
+    source_folder: str,
+    destination_folder: str,
+    face_config: Dict[str, Any],
+    processing: Dict[str, Any],
+    limit: int,
+) -> str:
+    payload = {
+        "source_folder": source_folder,
+        "destination_folder": destination_folder,
+        "provider": face_config.get("provider", "local"),
+        "tolerance": face_config.get("tolerance", 0.6),
+        "thumbnail_size": face_config.get("thumbnail_size", "w256h256"),
+        "image_extensions": processing.get("image_extensions", [".jpg", ".jpeg", ".png", ".heic"]),
+        "limit": limit,
+    }
+    encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return base64.b64encode(encoded).decode("ascii")
+
+
+def load_cache(cache_file: str, cache_key: str, logger: logging.Logger) -> Optional[List[ImageEntry]]:
+    if not os.path.exists(cache_file):
+        return None
+
+    try:
+        with open(cache_file, "r") as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Unable to read cache file, rebuilding: {e}")
+        return None
+
+    if payload.get("cache_key") != cache_key:
+        logger.info("Cache key mismatch, rebuilding dashboard data")
+        return None
+
+    entries = [
+        ImageEntry(
+            path=item["path"],
+            matched=item["matched"],
+            num_matches=item["num_matches"],
+            total_faces=item["total_faces"],
+            thumbnail_base64=item["thumbnail_base64"],
+        )
+        for item in payload.get("entries", [])
+    ]
+    logger.info(f"Loaded {len(entries)} cached entries")
+    return entries
+
+
+def save_cache(cache_file: str, cache_key: str, entries: List[ImageEntry], logger: logging.Logger) -> None:
+    cache_dir = os.path.dirname(cache_file)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+    payload = {
+        "cache_key": cache_key,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "entries": [
+            {
+                "path": entry.path,
+                "matched": entry.matched,
+                "num_matches": entry.num_matches,
+                "total_faces": entry.total_faces,
+                "thumbnail_base64": entry.thumbnail_base64,
+            }
+            for entry in entries
+        ],
+    }
+
+    try:
+        with open(cache_file, "w") as f:
+            json.dump(payload, f)
+    except OSError as e:
+        logger.warning(f"Unable to write cache file: {e}")
 
 
 def build_entries(
@@ -259,6 +343,16 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Host for the local server")
     parser.add_argument("--port", type=int, default=8000, help="Port for the local server")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of images processed (0 = no limit)")
+    parser.add_argument(
+        "--cache-file",
+        default="logs/debug_dashboard_cache.json",
+        help="Path to cache file for persisted results",
+    )
+    parser.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Rebuild cache by re-running inference",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -303,15 +397,20 @@ def main() -> int:
         logger.warning("No image files found in source folder")
         return 0
 
-    entries = build_entries(
-        dbx_client=dbx_client,
-        provider=provider,
-        face_config=face_config,
-        image_paths=image_paths,
-        tolerance=tolerance,
-        limit=args.limit,
-        logger=logger,
-    )
+    cache_key = build_cache_key(source_folder, destination_folder, face_config, processing, args.limit)
+    entries = None if args.refresh_cache else load_cache(args.cache_file, cache_key, logger)
+
+    if entries is None:
+        entries = build_entries(
+            dbx_client=dbx_client,
+            provider=provider,
+            face_config=face_config,
+            image_paths=image_paths,
+            tolerance=tolerance,
+            limit=args.limit,
+            logger=logger,
+        )
+        save_cache(args.cache_file, cache_key, entries, logger)
 
     html_payload = build_html(entries)
     run_server(html_payload, args.host, args.port, logger)

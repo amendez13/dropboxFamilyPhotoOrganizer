@@ -29,8 +29,11 @@ python scripts/debug_dashboard.py --host 127.0.0.1 --port 8000 --limit 50
 - `--host`: Host to bind the local server
 - `--port`: Port for the dashboard
 - `--limit`: Limit number of images processed (0 = all)
+- `--cache-file`: Path to the persisted cache file
+- `--refresh-cache`: Rebuild cache by re-running inference
 
 ## Notes
 
 - Each run makes AWS Rekognition calls and may incur API costs.
 - The dashboard uses the thumbnail size defined in `config/config.yaml`.
+- Cached results are reused on subsequent runs unless `--refresh-cache` is set.
