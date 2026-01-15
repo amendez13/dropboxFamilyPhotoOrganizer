@@ -263,6 +263,27 @@ python scripts/organize_photos.py --log-file /path/to/custom.log
 python scripts/organize_photos.py --verbose
 ```
 
+### Debug Dashboard (AWS)
+
+Launch a local dashboard that shows Dropbox thumbnails in a grid, highlighting
+AWS Rekognition matches in green and non-matches in red:
+
+```bash
+python scripts/debug_dashboard.py
+```
+
+Optional flags:
+```bash
+python scripts/debug_dashboard.py --host 127.0.0.1 --port 8000 --limit 50
+```
+
+Cache flags (persist results between runs):
+```bash
+python scripts/debug_dashboard.py --cache-file logs/debug_dashboard_cache.json --refresh-cache
+```
+
+Note: The first run calls AWS Rekognition for each image and may incur API costs. Subsequent runs reuse the cache unless `--refresh-cache` is set.
+
 ### Operation Modes
 
 **Copy (Default - Recommended)**

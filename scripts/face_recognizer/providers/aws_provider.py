@@ -3,11 +3,12 @@ AWS Rekognition face recognition provider.
 Uses AWS Rekognition for face detection and comparison.
 """
 
+import base64
 import logging
 import os
 import time
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
 
 import numpy as np
 
@@ -19,10 +20,24 @@ try:
 except ImportError:
     AWS_AVAILABLE = False
 
+if TYPE_CHECKING:
+    from PIL import Image as PilImage
+
 # Retry configuration
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BASE_DELAY = 1.0  # seconds
 DEFAULT_MAX_DELAY = 30.0  # seconds
+
+AWS_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+AWS_MAX_IMAGE_DIMENSION = 1600
+AWS_JPEG_QUALITY_STEPS = (85, 80, 75, 70, 65)
+
+_VALIDATION_IMAGE_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAvElEQVR4nO3QQQkAMAzAwPo3vYq4xyjkFI"
+    "TMC5nfAdc1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1"
+    "EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1ED"
+    "UQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRA1EDUQNRAtkfOhzns52jEAAAAASUVORK5CYII="
+)
 
 T = TypeVar("T")
 
@@ -178,18 +193,17 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             return False, "boto3 library not installed"
 
         try:
-            # Test API call
-            self.client.detect_faces(Image={"Bytes": b""}, Attributes=["DEFAULT"])
+            image_bytes = base64.b64decode(_VALIDATION_IMAGE_BASE64)
+            self.client.detect_faces(Image={"Bytes": image_bytes}, Attributes=["DEFAULT"])
+            return True, None
         except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "InvalidImageFormatException":
-                # Expected error with empty bytes, but credentials work
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in {"InvalidImageFormatException", "InvalidParameterException"}:
+                # Image validation issues still confirm credentials are usable.
                 return True, None
             return False, f"AWS authentication failed: {str(e)}"
         except Exception as e:
             return False, f"AWS configuration error: {str(e)}"
-
-        return True, None
 
     def load_reference_photos(self, photo_paths: List[str]) -> int:
         """
@@ -214,11 +228,21 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 with open(photo_path, "rb") as f:
                     image_bytes = f.read()
 
+                image_bytes = self._ensure_max_image_size(image_bytes, photo_path)
+                if len(image_bytes) > AWS_MAX_IMAGE_BYTES:
+                    self.logger.error(f"Unable to resize reference photo under 5MB, skipping: {photo_path}")
+                    continue
+
                 # Verify image has faces with retry support
                 response = self._verify_reference_photo_with_retry(image_bytes)
+                face_details = response.get("FaceDetails", [])
 
-                if not response["FaceDetails"]:
+                if not face_details:
                     self.logger.warning(f"No faces found in reference photo: {photo_path}")
+                    continue
+
+                if len(face_details) > 1:
+                    self.logger.warning(f"Multiple faces found in reference photo (AWS requires exactly one): {photo_path}")
                     continue
 
                 self.reference_images.append(image_bytes)
@@ -322,7 +346,15 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         if tolerance is None:
             tolerance = self.similarity_threshold
 
-        matches = []
+        image_data = self._ensure_max_image_size(image_data, source)
+        if len(image_data) > AWS_MAX_IMAGE_BYTES:
+            self.logger.error(f"Unable to resize target image under 5MB, skipping: {source}")
+            return [], 0
+
+        if not self._precheck_target_faces(image_data, source):
+            return [], 0
+
+        matches: List[FaceMatch] = []
         total_faces = 0
 
         # Compare against each reference image
@@ -331,22 +363,16 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 response = self._compare_faces_with_retry(ref_image, image_data, tolerance)
 
                 # Count all faces in target image
-                total_faces = max(total_faces, len(response.get("UnmatchedFaces", [])) + len(response.get("FaceMatches", [])))
+                total_faces = max(total_faces, self._count_faces_in_response(response))
 
                 # Process matches
-                for match in response.get("FaceMatches", []):
-                    similarity = match["Similarity"]
-                    confidence = similarity / 100.0
+                self._append_matches_from_response(response, matches)
 
-                    matches.append(
-                        FaceMatch(
-                            is_match=True,
-                            confidence=confidence,
-                            distance=1.0 - confidence,  # Convert similarity to distance
-                            matched_encoding=None,
-                        )
-                    )
-
+            except ClientError as e:
+                error = e.response.get("Error", {})
+                code = error.get("Code", "Unknown")
+                message = error.get("Message", str(e))
+                self.logger.error(f"Error comparing faces for {source}: {code}: {message}")
             except Exception as e:
                 self.logger.error(f"Error comparing faces for {source}: {e}")
 
@@ -362,3 +388,93 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             SourceImage={"Bytes": ref_image}, TargetImage={"Bytes": image_data}, SimilarityThreshold=tolerance
         )
         return response
+
+    def _ensure_max_image_size(self, image_bytes: bytes, source: str) -> bytes:
+        if len(image_bytes) <= AWS_MAX_IMAGE_BYTES:
+            return image_bytes
+
+        image = self._load_image_for_resize(image_bytes, source)
+        if image is None:
+            return image_bytes
+
+        return self._resize_image_bytes(image, source, image_bytes)
+
+    def _precheck_target_faces(self, image_data: bytes, source: str) -> bool:
+        try:
+            # Avoid CompareFaces errors when the target has no detectable faces.
+            precheck_faces = self._detect_faces_with_retry(image_data, source)
+            if not precheck_faces:
+                self.logger.info(f"No faces detected in target image, skipping: {source}")
+                return False
+        except Exception as e:
+            self.logger.error(f"Error detecting faces for {source}: {e}")
+            return False
+        return True
+
+    def _count_faces_in_response(self, response: Dict[str, Any]) -> int:
+        return len(response.get("UnmatchedFaces", [])) + len(response.get("FaceMatches", []))
+
+    def _append_matches_from_response(self, response: Dict[str, Any], matches: List[FaceMatch]) -> None:
+        for match in response.get("FaceMatches", []):
+            similarity = match["Similarity"]
+            confidence = similarity / 100.0
+
+            matches.append(
+                FaceMatch(
+                    is_match=True,
+                    confidence=confidence,
+                    distance=1.0 - confidence,  # Convert similarity to distance
+                    matched_encoding=None,
+                )
+            )
+
+    def _load_image_for_resize(self, image_bytes: bytes, source: str) -> Optional["PilImage.Image"]:
+        try:
+            from io import BytesIO
+
+            from PIL import Image, ImageOps
+        except Exception as e:
+            self.logger.error(f"Unable to resize image without Pillow for {source}: {e}")
+            return None
+
+        try:
+            image: PilImage.Image = Image.open(BytesIO(image_bytes))
+            image = ImageOps.exif_transpose(image)
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+            return image
+        except Exception as e:
+            self.logger.error(f"Unable to read image for resizing: {source}: {e}")
+            return None
+
+    def _resize_image_bytes(self, image: "PilImage.Image", source: str, fallback_bytes: bytes) -> bytes:
+        from io import BytesIO
+
+        from PIL import Image
+
+        max_dim = AWS_MAX_IMAGE_DIMENSION
+        smallest = fallback_bytes
+
+        resample = getattr(Image, "Resampling", Image).LANCZOS
+
+        while True:
+            working = image.copy()
+            working.thumbnail((max_dim, max_dim), resample)
+
+            for quality in AWS_JPEG_QUALITY_STEPS:
+                buffer = BytesIO()
+                working.save(buffer, format="JPEG", quality=quality, optimize=True, progressive=True)
+                data = buffer.getvalue()
+
+                if len(data) <= AWS_MAX_IMAGE_BYTES:
+                    self.logger.warning(f"Resized image to fit AWS 5MB limit: {source}")
+                    return data
+
+                if len(data) < len(smallest):
+                    smallest = data
+
+            if max_dim <= 300:
+                self.logger.warning(f"Unable to reach 5MB limit, using smallest resized image: {source}")
+                return smallest
+
+            max_dim = int(max_dim * 0.85)

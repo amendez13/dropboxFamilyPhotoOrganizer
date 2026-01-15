@@ -381,6 +381,19 @@ class TestValidateConfiguration:
         assert is_valid is True
         assert error is None
 
+    def test_validate_configuration_success_no_error(self, mock_aws_available):
+        """Test validation passes when API call succeeds without errors."""
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {}
+        provider = AWSFaceRecognitionProvider(config)
+        provider.client.detect_faces.return_value = {}
+
+        is_valid, error = provider.validate_configuration()
+
+        assert is_valid is True
+        assert error is None
+
     def test_validate_configuration_boto3_unavailable(self, mock_aws_available):
         """Test validation fails when boto3 is not available."""
         from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
@@ -482,6 +495,15 @@ class TestLoadReferencePhotos:
 
         assert "No reference photos could be loaded" in str(exc_info.value)
 
+    def test_load_reference_photos_multiple_faces_skipped(self, provider, mock_image_file):
+        """Test handling when multiple faces are detected in reference photo."""
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.5}, {"Confidence": 97.0}]}
+
+        with pytest.raises(Exception) as exc_info:
+            provider.load_reference_photos([mock_image_file])
+
+        assert "No reference photos could be loaded" in str(exc_info.value)
+
     def test_load_reference_photos_api_error(self, provider, mock_image_file, mock_aws_available):
         """Test handling of API errors during reference photo loading."""
         # Mock API error
@@ -553,6 +575,25 @@ class TestLoadReferencePhotos:
         count = provider.load_reference_photos([str(valid_path), str(valid_path)])
 
         assert count == 1  # Only first one should succeed
+
+    def test_load_reference_photos_skips_oversize(self, provider, tmp_path, monkeypatch):
+        """Test that oversized reference photos are skipped."""
+        from scripts.face_recognizer.providers.aws_provider import AWS_MAX_IMAGE_BYTES
+
+        photo_path = tmp_path / "oversize.jpg"
+        photo_path.write_bytes(b"fake")
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.5}]}
+
+        monkeypatch.setattr(
+            provider,
+            "_ensure_max_image_size",
+            lambda image_bytes, source: b"x" * (AWS_MAX_IMAGE_BYTES + 1),
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            provider.load_reference_photos([str(photo_path)])
+
+        assert "No reference photos could be loaded" in str(exc_info.value)
 
 
 class TestDetectFaces:
@@ -695,6 +736,7 @@ class TestFindMatchesInImage:
         provider = AWSFaceRecognitionProvider(config)
         # Add a mock reference image
         provider.reference_images = [b"fake_reference_image_bytes"]
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
         return provider
 
     @pytest.fixture
@@ -801,6 +843,22 @@ class TestFindMatchesInImage:
 
         assert total_faces == 3  # 1 matched + 2 unmatched
 
+    def test_find_matches_skips_oversize_target(self, provider, test_image_bytes, monkeypatch):
+        """Test that oversized target images are skipped."""
+        from scripts.face_recognizer.providers.aws_provider import AWS_MAX_IMAGE_BYTES
+
+        monkeypatch.setattr(
+            provider,
+            "_ensure_max_image_size",
+            lambda image_bytes, source: b"x" * (AWS_MAX_IMAGE_BYTES + 1),
+        )
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 0
+        provider.client.compare_faces.assert_not_called()
+
     def test_find_matches_generic_error(self, provider, test_image_bytes):
         """Test handling of generic errors during matching."""
         provider.client.compare_faces.side_effect = Exception("Network error")
@@ -817,12 +875,25 @@ class TestFindMatchesInImage:
         config = {}
         provider = AWSFaceRecognitionProvider(config)
         # Don't add any reference images
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
 
         matches, total_faces = provider.find_matches_in_image(test_image_bytes)
 
         assert len(matches) == 0
         assert total_faces == 0
         provider.client.compare_faces.assert_not_called()
+
+
+class TestPrecheckTargetFaces:
+    """Test target face precheck helper."""
+
+    def test_precheck_target_faces_no_faces(self, mock_aws_available):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        provider = AWSFaceRecognitionProvider({})
+        provider._detect_faces_with_retry = MagicMock(return_value=[])
+
+        assert provider._precheck_target_faces(b"fake", "test.jpg") is False
 
 
 class TestAWSProviderIntegration:
