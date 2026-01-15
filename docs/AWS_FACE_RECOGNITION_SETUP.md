@@ -658,6 +658,10 @@ Once your AWS Rekognition provider is set up:
    ```bash
    python scripts/organize_photos.py --dry-run
    ```
+4. **Optional: Review matches in the debug dashboard**
+   ```bash
+   python scripts/debug_dashboard.py
+   ```
 4. **Review matches** and adjust `similarity_threshold` if needed:
    - Increase (e.g., 85-90) for fewer false positives
    - Decrease (e.g., 70-75) for more matches (may include false positives)

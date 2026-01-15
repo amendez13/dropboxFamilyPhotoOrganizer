@@ -96,6 +96,10 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - Troubleshooting CI failures
 - Best practices for development
 
+**[DEBUG_DASHBOARD.md](DEBUG_DASHBOARD.md)**
+- Local web dashboard for reviewing AWS match results
+- How to run and configure the dashboard
+
 **[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)**
 - Branch protection rules for main branch
 - Required status checks and PR reviews
@@ -140,6 +144,7 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
+| [DEBUG_DASHBOARD.md](DEBUG_DASHBOARD.md) | Local debug dashboard usage | Developers |
 
 ---
 
