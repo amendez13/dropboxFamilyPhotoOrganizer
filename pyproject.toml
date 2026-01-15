@@ -55,6 +55,7 @@ omit = [
     "scripts/check_account.py",
     "scripts/list_folders.py",
     "scripts/test_dropbox_connection.py",
+    "scripts/debug_dashboard.py",
 ]
 
 [tool.coverage.report]

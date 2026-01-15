@@ -695,6 +695,7 @@ class TestFindMatchesInImage:
         provider = AWSFaceRecognitionProvider(config)
         # Add a mock reference image
         provider.reference_images = [b"fake_reference_image_bytes"]
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
         return provider
 
     @pytest.fixture
@@ -817,6 +818,7 @@ class TestFindMatchesInImage:
         config = {}
         provider = AWSFaceRecognitionProvider(config)
         # Don't add any reference images
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
 
         matches, total_faces = provider.find_matches_in_image(test_image_bytes)
 

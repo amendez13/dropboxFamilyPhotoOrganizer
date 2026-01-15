@@ -130,13 +130,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.warning.assert_called_with("Could not get thumbnail for /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
@@ -152,13 +153,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, True, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.warning.assert_called_with("Could not download full-size photo: /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
@@ -175,13 +177,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.error.assert_called_with("Image processing error for /Photos/test.jpg: Disk error")
 
     def test_process_images_handles_value_errors(self, organize_photos_module: ModuleType) -> None:
@@ -197,13 +200,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.warning.assert_called_with("Invalid image data for /Photos/test.jpg: Invalid image format")
 
     def test_process_images_handles_unexpected_exception(self, organize_photos_module: ModuleType) -> None:
@@ -218,13 +222,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         # Check that error was logged with exc_info=True
         mock_logger.error.assert_called_with("Unexpected error processing /Photos/test.jpg: Unexpected error", exc_info=True)
 
@@ -241,13 +246,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 0
         assert len(matches) == 1
+        assert no_match_paths == []
         assert matches[0]["file_path"] == "/Photos/test.jpg"
         assert matches[0]["num_matches"] == 1
         assert matches[0]["total_faces"] == 1
@@ -268,11 +274,12 @@ class TestProcessImages:
             mock_file.path_display = f"/Photos/test{i}.jpg"
             image_files.append(mock_file)
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, True, mock_logger
         )
 
         assert processed == 15
+        assert len(no_match_paths) == 0
         # In verbose mode, should log every file
         assert mock_logger.info.call_count >= 15  # At least one call per file plus summary
 
@@ -291,11 +298,12 @@ class TestProcessImages:
             mock_file.path_display = f"/Photos/test{i}.jpg"
             image_files.append(mock_file)
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 25
+        assert len(no_match_paths) == 25
         # In non-verbose mode, progress is logged every 10th file (files 10, 20)
         # Plus 3 header lines = 5 info calls, much less than 25 files
         # Verify that "Processing X/25" appears only for files 10 and 20
@@ -322,7 +330,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         # Should only call copy_file once (second file has duplicate filename)
         assert mock_dbx_client.copy_file.call_count == 1
@@ -340,7 +348,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", True, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", True, mock_logger)
 
         # Should not call any file operations
         mock_dbx_client.copy_file.assert_not_called()
@@ -361,7 +369,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_dbx_client.copy_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Copied: /Photos/test.jpg → /Matches/test.jpg")
@@ -380,7 +388,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "move", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "move", False, mock_logger)
 
         mock_dbx_client.move_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Moved: /Photos/test.jpg → /Matches/test.jpg")
@@ -399,7 +407,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.error.assert_called_with("✗ Failed to copy: /Photos/test.jpg")
 
@@ -418,7 +426,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("Successfully copied 2/2 file(s)")
 
@@ -430,7 +438,7 @@ class TestPerformOperations:
         matches = []
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("No matching images found")
         mock_dbx_client.copy_file.assert_not_called()

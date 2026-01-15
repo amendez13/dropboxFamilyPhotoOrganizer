@@ -346,7 +346,7 @@ export AWS_DEFAULT_REGION="us-east-1"
 Create a test script to verify your AWS configuration:
 
 ```python
-# test_aws_connection.py
+# scripts/aws_tests/test_aws_connection.py
 import yaml
 from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
 
@@ -374,7 +374,7 @@ except Exception as e:
 Run the test:
 ```bash
 source venv/bin/activate
-python test_aws_connection.py
+python scripts/aws_tests/test_aws_connection.py
 ```
 
 ### Step 3: Load Reference Photos
@@ -382,7 +382,7 @@ python test_aws_connection.py
 Test loading your reference photos:
 
 ```python
-# test_aws_reference.py
+# scripts/aws_tests/test_aws_reference.py
 import yaml
 import glob
 from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
@@ -410,7 +410,7 @@ except Exception as e:
 
 Run the test:
 ```bash
-python test_aws_reference.py
+python scripts/aws_tests/test_aws_reference.py
 ```
 
 ### Step 4: Understanding the AWS Process

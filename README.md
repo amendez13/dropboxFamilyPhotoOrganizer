@@ -263,6 +263,22 @@ python scripts/organize_photos.py --log-file /path/to/custom.log
 python scripts/organize_photos.py --verbose
 ```
 
+### Debug Dashboard (AWS)
+
+Launch a local dashboard that shows Dropbox thumbnails in a grid, highlighting
+AWS Rekognition matches in green and non-matches in red:
+
+```bash
+python scripts/debug_dashboard.py
+```
+
+Optional flags:
+```bash
+python scripts/debug_dashboard.py --host 127.0.0.1 --port 8000 --limit 50
+```
+
+Note: This will call AWS Rekognition for each image and may incur API costs.
+
 ### Operation Modes
 
 **Copy (Default - Recommended)**

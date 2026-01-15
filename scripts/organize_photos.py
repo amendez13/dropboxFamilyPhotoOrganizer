@@ -200,7 +200,7 @@ def process_images(
     tolerance: float,
     verbose_processing: bool,
     logger: logging.Logger,
-) -> Tuple[List[Dict[str, Any]], int, int]:
+) -> Tuple[List[Dict[str, Any]], int, int, List[str]]:
     """
     Process images from Dropbox and find face matches.
 
@@ -218,14 +218,16 @@ def process_images(
         logger: Logger instance for output
 
     Returns:
-        Tuple of (matches, processed, errors) where:
+        Tuple of (matches, processed, errors, no_match_paths) where:
         - matches: List of dicts with file_path, num_matches, total_faces, matches
         - processed: Total number of images processed
         - errors: Number of images that failed to process
+        - no_match_paths: List of file paths with no matches
     """
     matches = []
     processed = 0
     errors = 0
+    no_match_paths = []
 
     logger.info("=" * 70)
     logger.info("Processing images...")
@@ -258,6 +260,8 @@ def process_images(
                 }
                 matches.append(match_info)
                 logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
+            else:
+                no_match_paths.append(file_path)
 
         except (OSError, IOError) as e:
             logger.error(f"Image processing error for {file_path}: {e}")
@@ -269,11 +273,12 @@ def process_images(
             logger.error(f"Unexpected error processing {file_path}: {e}", exc_info=True)
             errors += 1
 
-    return matches, processed, errors
+    return matches, processed, errors, no_match_paths
 
 
 def perform_operations(
     matches: List[Dict[str, Any]],
+    no_match_paths: List[str],
     destination_folder: str,
     dbx_client: DropboxClient,
     operation: str,
@@ -289,6 +294,7 @@ def perform_operations(
     Args:
         matches: List of match dicts from process_images(), each containing
                  file_path, num_matches, total_faces, and matches keys
+        no_match_paths: List of file paths that had no face matches
         destination_folder: Dropbox path where matched files will be copied/moved
         dbx_client: Initialized DropboxClient instance for file operations
         operation: Operation type - either 'copy' or 'move'
@@ -298,13 +304,17 @@ def perform_operations(
     Returns:
         None. Results are logged via the logger parameter.
     """
-    if not matches:
+    if matches:
+        logger.info(f"Found {len(matches)} image(s) with matching faces:")
+        for match in matches:
+            logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
+    else:
         logger.info("No matching images found")
-        return
 
-    logger.info(f"Found {len(matches)} image(s) with matching faces:")
-    for match in matches:
-        logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
+    if no_match_paths:
+        logger.info(f"Found {len(no_match_paths)} image(s) with no matching faces:")
+        for path in no_match_paths:
+            logger.info(f"  - {path}")
 
     if dry_run:
         logger.info("")
@@ -543,7 +553,7 @@ def main() -> int:
             return 0
 
         # Process images
-        matches, processed, errors = process_images(
+        matches, processed, errors, no_match_paths = process_images(
             image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger
         )
 
@@ -560,7 +570,7 @@ def main() -> int:
         _setup_audit_logger_if_enabled(log_file, logger)
 
         # Perform operations
-        perform_operations(matches, destination_folder, dbx_client, operation, dry_run, logger)
+        perform_operations(matches, no_match_paths, destination_folder, dbx_client, operation, dry_run, logger)
 
         return 0
 
