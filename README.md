@@ -277,7 +277,12 @@ Optional flags:
 python scripts/debug_dashboard.py --host 127.0.0.1 --port 8000 --limit 50
 ```
 
-Note: This will call AWS Rekognition for each image and may incur API costs.
+Cache flags (persist results between runs):
+```bash
+python scripts/debug_dashboard.py --cache-file logs/debug_dashboard_cache.json --refresh-cache
+```
+
+Note: The first run calls AWS Rekognition for each image and may incur API costs. Subsequent runs reuse the cache unless `--refresh-cache` is set.
 
 ### Operation Modes
 

@@ -662,6 +662,7 @@ Once your AWS Rekognition provider is set up:
    ```bash
    python scripts/debug_dashboard.py
    ```
+   The dashboard caches results by default so you can reload without re-running inference. Use `--refresh-cache` to force a new run.
 4. **Review matches** and adjust `similarity_threshold` if needed:
    - Increase (e.g., 85-90) for fewer false positives
    - Decrease (e.g., 70-75) for more matches (may include false positives)

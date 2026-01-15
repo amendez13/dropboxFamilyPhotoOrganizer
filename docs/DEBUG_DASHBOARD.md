@@ -34,6 +34,6 @@ python scripts/debug_dashboard.py --host 127.0.0.1 --port 8000 --limit 50
 
 ## Notes
 
-- Each run makes AWS Rekognition calls and may incur API costs.
+- The first run makes AWS Rekognition calls and may incur API costs.
 - The dashboard uses the thumbnail size defined in `config/config.yaml`.
 - Cached results are reused on subsequent runs unless `--refresh-cache` is set.
