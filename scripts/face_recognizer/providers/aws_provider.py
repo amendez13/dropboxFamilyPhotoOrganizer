@@ -438,7 +438,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             return None
 
         try:
-            image = Image.open(BytesIO(image_bytes))
+            image: PilImage.Image = Image.open(BytesIO(image_bytes))
             image = ImageOps.exif_transpose(image)
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
@@ -455,9 +455,11 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         max_dim = AWS_MAX_IMAGE_DIMENSION
         smallest = fallback_bytes
 
+        resample = getattr(Image, "Resampling", Image).LANCZOS
+
         while True:
             working = image.copy()
-            working.thumbnail((max_dim, max_dim), Image.LANCZOS)
+            working.thumbnail((max_dim, max_dim), resample)
 
             for quality in AWS_JPEG_QUALITY_STEPS:
                 buffer = BytesIO()
