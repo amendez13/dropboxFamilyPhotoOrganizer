@@ -714,6 +714,25 @@ class TestFaceCollectionReferenceLoading:
         with pytest.raises(Exception):
             provider.load_reference_photos([mock_image_file])
 
+    def test_collection_skip_existing_false_indexes_duplicates(self, mock_aws_available, mock_image_file):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "test-collection",
+            "collection_skip_existing": False,
+        }
+        provider = AWSFaceRecognitionProvider(config)
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
+        provider.client.index_faces.return_value = {"FaceRecords": [{"Face": {"FaceId": "face-1"}}]}
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+        provider.client.list_faces.assert_not_called()
+        provider.client.index_faces.assert_called_once()
+
 
 class TestFaceCollectionHelpers:
     """Test helper methods for face collections."""

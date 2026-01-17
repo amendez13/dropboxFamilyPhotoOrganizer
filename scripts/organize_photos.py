@@ -528,9 +528,12 @@ def main() -> int:
 
         if not reference_photos:
             if getattr(provider, "use_face_collection", False):
-                logger.info("No local reference photos found; using AWS face collection")
                 num_faces = provider.load_reference_photos([])
-                logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
+                collection_id = getattr(provider, "face_collection_id", "unknown")
+                logger.warning(
+                    f"No local reference photos found; using AWS face collection '{collection_id}' "
+                    f"with {num_faces} face(s)"
+                )
             else:
                 logger.error(f"No reference photos found in {reference_photos_dir}")
                 logger.error("Please add reference photos and run scripts/train_face_model.py first")

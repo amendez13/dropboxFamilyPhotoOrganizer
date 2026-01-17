@@ -259,9 +259,10 @@ aws:
 
 Notes:
 - Collections store face feature data, not images.
-- `search_faces_by_image` evaluates the largest face in a target image.
-  For group shots, ensure the target face is prominent or consider using full-size photos.
 - External image IDs default to the reference photo filename (duplicates get a short hash suffix).
+
+> **Important:** `search_faces_by_image` evaluates the largest face in a target image.
+> For group shots, ensure the target face is prominent or consider using full-size photos.
 
 ### Credential Options
 

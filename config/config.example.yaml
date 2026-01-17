@@ -68,7 +68,7 @@ face_recognition:
     # face_collection_id: "family-collection"
     # collection_create_if_missing: true
     # collection_skip_existing: true
-    # collection_max_faces: 5
+    # collection_max_faces: 5  # Max matches returned per search (higher = more API cost)
 
   # Azure Face API settings (only needed if provider is 'azure')
   azure:

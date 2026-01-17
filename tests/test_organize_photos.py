@@ -1070,6 +1070,7 @@ processing:
 
         mock_provider = Mock()
         mock_provider.use_face_collection = True
+        mock_provider.face_collection_id = "collection-1"
         mock_provider.load_reference_photos.return_value = 2
         organize_photos_module.get_provider = Mock(return_value=mock_provider)
 
@@ -1078,6 +1079,7 @@ processing:
 
             assert result == 0
             mock_provider.load_reference_photos.assert_called_once_with([])
+            assert any("collection-1" in str(call) for call in mock_logger.warning.call_args_list)
         finally:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
