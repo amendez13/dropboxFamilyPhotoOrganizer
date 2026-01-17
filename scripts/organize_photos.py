@@ -28,6 +28,40 @@ from scripts.metrics import MetricsCollector  # noqa: E402
 _audit_logger: Optional[logging.Logger] = None
 
 
+def _init_metrics_for_provider(
+    provider: BaseFaceRecognitionProvider,
+    face_config: Dict[str, Any],
+    logger: logging.Logger,
+) -> Optional[MetricsCollector]:
+    """Initialize metrics collector for AWS provider."""
+    if provider.get_provider_name() != "aws":
+        return None
+
+    pricing_config = face_config.get("aws", {}).get("pricing", {})
+    metrics_collector = MetricsCollector(pricing_config=pricing_config)
+    metrics_collector.start_collection()
+
+    if hasattr(provider, "set_metrics_collector"):
+        provider.set_metrics_collector(metrics_collector)
+        logger.info("Metrics collection enabled for AWS provider")
+
+    return metrics_collector
+
+
+def _finalize_metrics(
+    metrics_collector: Optional[MetricsCollector],
+    logger: logging.Logger,
+) -> None:
+    """Finalize metrics collection and save to file."""
+    if not metrics_collector:
+        return
+
+    metrics_collector.end_collection()
+    logger.info("")
+    metrics_collector.log_summary(logger)
+    metrics_collector.save_to_file("logs/aws_metrics.json")
+
+
 def setup_audit_logging(log_file: str) -> logging.Logger:
     """
     Set up a dedicated logger for audit operations.
@@ -272,18 +306,8 @@ def process_images(
             else:
                 no_match_paths.append(file_path)
 
-        except (OSError, IOError) as e:
-            logger.error(f"Image processing error for {file_path}: {e}")
-            errors += 1
-            if metrics_collector:
-                metrics_collector.record_image_error()
-        except ValueError as e:
-            logger.warning(f"Invalid image data for {file_path}: {e}")
-            errors += 1
-            if metrics_collector:
-                metrics_collector.record_image_error()
         except Exception as e:
-            logger.error(f"Unexpected error processing {file_path}: {e}", exc_info=True)
+            logger.error(f"Error processing {file_path}: {e}")
             errors += 1
             if metrics_collector:
                 metrics_collector.record_image_error()
@@ -538,16 +562,7 @@ def main() -> int:
         provider = _setup_face_provider(face_config, tolerance, logger)
 
         # Initialize metrics collector for AWS provider
-        metrics_collector = None
-        if provider.get_provider_name() == "aws":
-            pricing_config = face_config.get("aws", {}).get("pricing", {})
-            metrics_collector = MetricsCollector(pricing_config=pricing_config)
-            metrics_collector.start_collection()
-
-            # Attach metrics collector to AWS provider
-            if hasattr(provider, "set_metrics_collector"):
-                provider.set_metrics_collector(metrics_collector)
-                logger.info("Metrics collection enabled for AWS provider")
+        metrics_collector = _init_metrics_for_provider(provider, face_config, logger)
 
         # Load reference photos
         logger.info(f"Loading reference photos from {reference_photos_dir}...")
@@ -589,7 +604,15 @@ def main() -> int:
 
         # Process images
         matches, processed, errors, no_match_paths = process_images(
-            image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger, metrics_collector
+            image_files,
+            dbx_client,
+            provider,
+            face_config,
+            use_full_size,
+            tolerance,
+            verbose_processing,
+            logger,
+            metrics_collector,
         )
 
         # Print summary
@@ -608,16 +631,7 @@ def main() -> int:
         perform_operations(matches, no_match_paths, destination_folder, dbx_client, operation, dry_run, logger)
 
         # Output metrics summary and save to file (AWS provider only)
-        if metrics_collector:
-            metrics_collector.end_collection()
-
-            # Log metrics summary
-            logger.info("")
-            metrics_collector.log_summary(logger)
-
-            # Save metrics to JSON file
-            metrics_file = "logs/aws_metrics.json"
-            metrics_collector.save_to_file(metrics_file)
+        _finalize_metrics(metrics_collector, logger)
 
         return 0
 
