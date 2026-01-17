@@ -7,6 +7,7 @@ import base64
 import hashlib
 import logging
 import os
+import re
 import time
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
@@ -379,6 +380,9 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
     def _normalized_external_base_name(self, photo_path: str) -> str:
         base_name = os.path.basename(photo_path).strip() or "reference"
+        # AWS externalImageId only allows [a-zA-Z0-9_.\-:]+
+        # Replace spaces and other invalid characters with underscores
+        base_name = re.sub(r"[^a-zA-Z0-9_.\-:]", "_", base_name)
         if len(base_name) > 200:
             base_name = base_name[:200]
         return base_name
