@@ -22,6 +22,7 @@ from scripts.dropbox_client import DropboxClient  # noqa: E402
 from scripts.face_recognizer import get_provider  # noqa: E402
 from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider  # noqa: E402
 from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
+from scripts.metrics import MetricsCollector  # noqa: E402
 
 # Global audit logger - initialized when setup_audit_logging is called
 _audit_logger: Optional[logging.Logger] = None
@@ -200,6 +201,7 @@ def process_images(
     tolerance: float,
     verbose_processing: bool,
     logger: logging.Logger,
+    metrics_collector: Optional[MetricsCollector] = None,
 ) -> Tuple[List[Dict[str, Any]], int, int, List[str]]:
     """
     Process images from Dropbox and find face matches.
@@ -251,6 +253,13 @@ def process_images(
             # Detect faces and check for matches
             face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
 
+            # Record metrics if collector is available
+            if metrics_collector:
+                has_faces = total_faces > 0
+                has_matches = len(face_matches) > 0
+                metrics_collector.record_face_detection(num_faces=total_faces, num_matches=len(face_matches))
+                metrics_collector.record_image_processed(has_faces=has_faces, has_matches=has_matches)
+
             if face_matches:
                 match_info = {
                     "file_path": file_path,
@@ -266,12 +275,18 @@ def process_images(
         except (OSError, IOError) as e:
             logger.error(f"Image processing error for {file_path}: {e}")
             errors += 1
+            if metrics_collector:
+                metrics_collector.record_image_error()
         except ValueError as e:
             logger.warning(f"Invalid image data for {file_path}: {e}")
             errors += 1
+            if metrics_collector:
+                metrics_collector.record_image_error()
         except Exception as e:
             logger.error(f"Unexpected error processing {file_path}: {e}", exc_info=True)
             errors += 1
+            if metrics_collector:
+                metrics_collector.record_image_error()
 
     return matches, processed, errors, no_match_paths
 
@@ -522,6 +537,18 @@ def main() -> int:
         # Initialize face recognition provider
         provider = _setup_face_provider(face_config, tolerance, logger)
 
+        # Initialize metrics collector for AWS provider
+        metrics_collector = None
+        if provider.get_provider_name() == "aws":
+            pricing_config = face_config.get("aws", {}).get("pricing", {})
+            metrics_collector = MetricsCollector(pricing_config=pricing_config)
+            metrics_collector.start_collection()
+
+            # Attach metrics collector to AWS provider
+            if hasattr(provider, "set_metrics_collector"):
+                provider.set_metrics_collector(metrics_collector)
+                logger.info("Metrics collection enabled for AWS provider")
+
         # Load reference photos
         logger.info(f"Loading reference photos from {reference_photos_dir}...")
         reference_photos = _get_reference_photos(reference_photos_dir, image_extensions)
@@ -562,7 +589,7 @@ def main() -> int:
 
         # Process images
         matches, processed, errors, no_match_paths = process_images(
-            image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger
+            image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger, metrics_collector
         )
 
         # Print summary
@@ -579,6 +606,18 @@ def main() -> int:
 
         # Perform operations
         perform_operations(matches, no_match_paths, destination_folder, dbx_client, operation, dry_run, logger)
+
+        # Output metrics summary and save to file (AWS provider only)
+        if metrics_collector:
+            metrics_collector.end_collection()
+
+            # Log metrics summary
+            logger.info("")
+            metrics_collector.log_summary(logger)
+
+            # Save metrics to JSON file
+            metrics_file = "logs/aws_metrics.json"
+            metrics_collector.save_to_file(metrics_file)
 
         return 0
 

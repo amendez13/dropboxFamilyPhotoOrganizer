@@ -70,6 +70,19 @@ face_recognition:
     # collection_skip_existing: true
     # collection_max_faces: 5  # Max matches returned per search (higher = more API cost)
 
+    # Pricing configuration for cost estimation (optional)
+    # Update these values based on your AWS region pricing
+    # See: https://aws.amazon.com/rekognition/pricing/
+    pricing:
+      currency: "USD"
+      detect_faces_per_1000: 1.0         # DetectFaces API: $1.00 per 1,000 images
+      compare_faces_per_1000: 1.0        # CompareFaces API: $1.00 per 1,000 images
+      search_faces_per_1000: 6.0         # SearchFacesByImage API: $6.00 per 1,000 images
+      index_faces_per_1000: 1.0          # IndexFaces API: $1.00 per 1,000 images
+      list_faces_per_1000: 0.0           # ListFaces API: Free
+      describe_collection_per_1000: 0.0  # DescribeCollection API: Free
+      create_collection_per_1000: 0.0    # CreateCollection API: Free
+
   # Azure Face API settings (only needed if provider is 'azure')
   azure:
     # azure_api_key: "YOUR_AZURE_API_KEY"
