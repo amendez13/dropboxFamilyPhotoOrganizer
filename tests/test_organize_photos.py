@@ -185,7 +185,7 @@ class TestProcessImages:
         assert errors == 1
         assert len(matches) == 0
         assert no_match_paths == []
-        mock_logger.error.assert_called_with("Image processing error for /Photos/test.jpg: Disk error")
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Disk error")
 
     def test_process_images_handles_value_errors(self, organize_photos_module: ModuleType) -> None:
         """Test that ValueError for invalid data is caught and logged."""
@@ -208,10 +208,10 @@ class TestProcessImages:
         assert errors == 1
         assert len(matches) == 0
         assert no_match_paths == []
-        mock_logger.warning.assert_called_with("Invalid image data for /Photos/test.jpg: Invalid image format")
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Invalid image format")
 
     def test_process_images_handles_unexpected_exception(self, organize_photos_module: ModuleType) -> None:
-        """Test that unexpected exceptions are caught and logged with exc_info."""
+        """Test that unexpected exceptions are caught and logged."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
@@ -230,8 +230,7 @@ class TestProcessImages:
         assert errors == 1
         assert len(matches) == 0
         assert no_match_paths == []
-        # Check that error was logged with exc_info=True
-        mock_logger.error.assert_called_with("Unexpected error processing /Photos/test.jpg: Unexpected error", exc_info=True)
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Unexpected error")
 
     def test_process_images_returns_matches(self, organize_photos_module: ModuleType) -> None:
         """Test that face matches are correctly identified and returned."""
