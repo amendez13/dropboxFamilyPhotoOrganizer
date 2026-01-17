@@ -7,15 +7,16 @@ Shows which files use sys.path manipulation and their import dependencies.
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Any, Dict, List
 
 
-def analyze_imports(project_root):  # noqa: C901
+def analyze_imports(project_root: Path) -> Dict[str, Any]:  # noqa: C901
     """Analyze import patterns in Python files."""
 
     scripts_dir = project_root / "scripts"
     tests_dir = project_root / "tests"
 
-    results = {
+    results: Dict[str, Any] = {
         "sys_path_files": [],
         "import_patterns": defaultdict(list),
         "total_files": 0,
@@ -72,7 +73,7 @@ def analyze_imports(project_root):  # noqa: C901
     return results
 
 
-def print_report(results):
+def print_report(results: Dict[str, Any]) -> None:
     """Print analysis report."""
 
     print("=" * 80)
@@ -127,7 +128,7 @@ def print_report(results):
     print()
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     # Get the actual project root (2 levels up from scripts/github/)
     project_root = Path(__file__).parent.parent.parent
