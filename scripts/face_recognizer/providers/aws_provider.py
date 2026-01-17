@@ -199,9 +199,21 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         # We store the reference image bytes for comparison
         self.reference_images: List[bytes] = []
 
+        # Metrics collector (optional)
+        self.metrics_collector: Optional[Any] = None
+
     def get_provider_name(self) -> str:
         """Get provider name."""
         return "aws"
+
+    def set_metrics_collector(self, collector: Any) -> None:
+        """
+        Set the metrics collector for tracking API usage.
+
+        Args:
+            collector: MetricsCollector instance
+        """
+        self.metrics_collector = collector
 
     def validate_configuration(self) -> Tuple[bool, Optional[str]]:
         """Validate AWS configuration."""
@@ -375,6 +387,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
     def _verify_reference_photo_with_retry(self, image_bytes: bytes) -> Dict[str, Any]:
         """Internal method for verifying reference photos with retry support."""
         response: Dict[str, Any] = self.client.detect_faces(Image={"Bytes": image_bytes}, Attributes=["DEFAULT"])
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("detect_faces")
         return response
 
     def detect_faces(self, image_data: bytes, source: str = "unknown") -> List[FaceEncoding]:
@@ -399,6 +413,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
     def _detect_faces_with_retry(self, image_data: bytes, source: str) -> List[FaceEncoding]:
         """Internal method for face detection with retry support."""
         response = self.client.detect_faces(Image={"Bytes": image_data}, Attributes=["DEFAULT"])
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("detect_faces")
 
         face_encodings = []
         for face_detail in response["FaceDetails"]:
@@ -548,6 +564,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         response: Dict[str, Any] = self.client.compare_faces(
             SourceImage={"Bytes": ref_image}, TargetImage={"Bytes": image_data}, SimilarityThreshold=tolerance
         )
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("compare_faces")
         return response
 
     @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
@@ -558,6 +576,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             FaceMatchThreshold=tolerance,
             MaxFaces=self.collection_max_faces,
         )
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("search_faces")
         return response
 
     @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
@@ -569,11 +589,15 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             DetectionAttributes=["DEFAULT"],
             MaxFaces=1,
         )
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("index_faces")
         return response
 
     def _ensure_collection_exists(self) -> None:
         try:
             self.client.describe_collection(CollectionId=self.face_collection_id)
+            if self.metrics_collector:
+                self.metrics_collector.increment_api_call("describe_collection")
             return
         except ClientError as e:
             error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
@@ -583,6 +607,8 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 raise ValueError(f"AWS face collection does not exist: {self.face_collection_id}")
 
         self.client.create_collection(CollectionId=self.face_collection_id)
+        if self.metrics_collector:
+            self.metrics_collector.increment_api_call("create_collection")
         self.logger.info(f"Created AWS face collection: {self.face_collection_id}")
 
     def _list_collection_external_ids(self) -> set[str]:
@@ -595,6 +621,9 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
                 kwargs["NextToken"] = next_token
 
             response = self.client.list_faces(**kwargs)
+            if self.metrics_collector:
+                self.metrics_collector.increment_api_call("list_faces")
+
             for face in response.get("Faces", []):
                 external_id = face.get("ExternalImageId")
                 if external_id:

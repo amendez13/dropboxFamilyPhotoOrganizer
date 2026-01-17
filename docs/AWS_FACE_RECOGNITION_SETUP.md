@@ -522,6 +522,147 @@ aws budgets create-budget \
     --notifications-with-subscribers file://notifications.json
 ```
 
+### Metrics and Cost Tracking
+
+The photo organizer automatically collects detailed metrics for AWS Rekognition usage:
+
+#### What is Tracked
+
+- **API Call Counts**: Number of calls for each operation (DetectFaces, CompareFaces, SearchFacesByImage, IndexFaces, etc.)
+- **Face Statistics**: Total faces detected, matched, and unmatched
+- **Image Statistics**: Images processed, images with faces, images with matches, errors
+- **Cost Estimates**: Calculated based on API usage and configured pricing
+
+#### Configuration
+
+Add pricing configuration to `config/config.yaml` to enable cost estimation:
+
+```yaml
+face_recognition:
+  aws:
+    pricing:
+      currency: "USD"
+      detect_faces_per_1000: 1.0         # $1.00 per 1,000 images
+      compare_faces_per_1000: 1.0        # $1.00 per 1,000 images
+      search_faces_per_1000: 6.0         # $6.00 per 1,000 images
+      index_faces_per_1000: 1.0          # $1.00 per 1,000 images
+      list_faces_per_1000: 0.0           # Free
+      describe_collection_per_1000: 0.0  # Free
+      create_collection_per_1000: 0.0    # Free
+```
+
+**Note**: Pricing varies by AWS region. Update these values based on your region's pricing at [https://aws.amazon.com/rekognition/pricing/](https://aws.amazon.com/rekognition/pricing/)
+
+#### Metrics Output
+
+After each run, metrics are:
+
+1. **Logged to console**: Summary displayed at the end of processing
+2. **Saved to timestamped JSON file**: Each run creates a new file with historical tracking
+
+**Historical Metrics Tracking:**
+
+Each run creates a timestamped metrics file, preserving history:
+```
+logs/
+  aws_metrics_20260115_103045.json   # First run
+  aws_metrics_20260115_143022.json   # Second run
+  aws_metrics_20260116_091530.json   # Third run
+  aws_metrics_latest.json            # Symlink to most recent
+```
+
+- Files are never overwritten - each run creates a new timestamped file
+- A `_latest.json` symlink always points to the most recent metrics
+- Use this history to track usage patterns and costs over time
+
+Example metrics output:
+```
+==================================================================
+AWS Rekognition Metrics Summary
+==================================================================
+API Calls:
+  detect_faces: 105
+  compare_faces: 100
+  Total API calls: 205
+
+Face Statistics:
+  Total faces detected: 150
+  Faces matched: 25
+  Faces unmatched: 125
+  Max faces per image: 5
+  Avg faces per image: 1.50
+
+Image Statistics:
+  Images processed: 100
+  Images with faces: 85
+  Images without faces: 15
+  Images with matches: 20
+  Images skipped: 0
+  Images errored: 0
+
+Estimated Cost: 0.2050 USD
+(Note: Prices are region-dependent. Update config for accurate estimates)
+==================================================================
+```
+
+Example JSON file (`logs/aws_metrics.json`):
+```json
+{
+  "timestamp": "2024-01-15T10:30:45.123456",
+  "duration_seconds": 125.5,
+  "api_calls": {
+    "detect_faces": 105,
+    "compare_faces": 100,
+    "search_faces": 0,
+    "index_faces": 0
+  },
+  "total_api_calls": 205,
+  "face_statistics": {
+    "total_detected": 150,
+    "total_matched": 25,
+    "total_unmatched": 125,
+    "max_faces_per_image": 5,
+    "avg_faces_per_image": 1.5
+  },
+  "image_statistics": {
+    "processed": 100,
+    "with_faces": 85,
+    "without_faces": 15,
+    "with_matches": 20,
+    "skipped": 0,
+    "errored": 0
+  },
+  "cost_estimate": {
+    "amount": 0.205,
+    "currency": "USD"
+  }
+}
+```
+
+#### Using Metrics for Optimization
+
+Review metrics to optimize costs:
+
+- **High detect_faces count**: Consider pre-filtering images before processing
+- **Low match rate**: Adjust similarity threshold or improve reference photos
+- **Many images without faces**: Filter images by metadata before processing
+- **Cost trends**: Compare timestamped metrics files to track spending over time
+
+**Analyzing Historical Metrics:**
+
+```bash
+# List all metrics files by date
+ls -lt logs/aws_metrics_*.json
+
+# View latest metrics
+cat logs/aws_metrics_latest.json | jq .cost_estimate
+
+# Compare costs across runs
+for f in logs/aws_metrics_202601*.json; do
+  echo "$f: $(cat $f | jq -r '.cost_estimate.amount // 0') USD"
+done
+```
+
 ---
 
 ## Troubleshooting
