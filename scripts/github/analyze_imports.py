@@ -7,7 +7,7 @@ Shows which files use sys.path manipulation and their import dependencies.
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 def analyze_imports(project_root: Path) -> Dict[str, Any]:  # noqa: C901
