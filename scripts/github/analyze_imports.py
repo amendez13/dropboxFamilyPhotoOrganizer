@@ -4,13 +4,12 @@ Analyze import patterns in the scripts folder.
 Shows which files use sys.path manipulation and their import dependencies.
 """
 
-import os
 import re
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 
-def analyze_imports(project_root):
+def analyze_imports(project_root):  # noqa: C901
     """Analyze import patterns in Python files."""
 
     scripts_dir = project_root / "scripts"
@@ -81,7 +80,7 @@ def print_report(results):
     print("=" * 80)
     print()
 
-    print(f"📊 Statistics:")
+    print("📊 Statistics:")
     print(f"   Total Python files analyzed: {results['total_files']}")
     print(f"   Total lines of code: {results['total_lines']:,}")
     print(f"   Files using sys.path.insert: {len(results['sys_path_files'])}")
