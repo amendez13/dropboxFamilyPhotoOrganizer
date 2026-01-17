@@ -321,6 +321,17 @@ class TestAWSFaceRecognitionProviderInit:
 
         assert provider.similarity_threshold == 90.0
 
+    def test_init_invalid_collection_max_faces_defaults(self, mock_aws_available):
+        """Test invalid collection_max_faces falls back to default."""
+        from scripts.face_recognizer.providers.aws_provider import AWS_DEFAULT_COLLECTION_MAX_FACES, AWSFaceRecognitionProvider
+
+        config = {
+            "collection_max_faces": "not-a-number",
+        }
+        provider = AWSFaceRecognitionProvider(config)
+
+        assert provider.collection_max_faces == AWS_DEFAULT_COLLECTION_MAX_FACES
+
     def test_init_stores_config(self, mock_aws_available):
         """Test that config is stored in parent class."""
         from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
@@ -594,6 +605,190 @@ class TestLoadReferencePhotos:
             provider.load_reference_photos([str(photo_path)])
 
         assert "No reference photos could be loaded" in str(exc_info.value)
+
+
+class TestFaceCollectionReferenceLoading:
+    """Test loading reference photos into AWS face collections."""
+
+    @pytest.fixture
+    def provider(self, mock_aws_available):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "test-collection",
+        }
+        return AWSFaceRecognitionProvider(config)
+
+    @pytest.fixture
+    def mock_image_file(self, tmp_path):
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 100), color="red")
+        img_path = tmp_path / "test_face.jpg"
+        img.save(img_path)
+        return str(img_path)
+
+    def test_collection_skips_existing_reference(self, provider, mock_image_file):
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.list_faces.return_value = {"Faces": [{"ExternalImageId": "test_face.jpg"}]}
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+        provider.client.index_faces.assert_not_called()
+        assert len(provider.reference_encodings) == 1
+
+    def test_collection_empty_allows_existing_faces_only(self, provider):
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.list_faces.return_value = {"Faces": [{"ExternalImageId": "face-a"}, {"ExternalImageId": "face-b"}]}
+
+        count = provider.load_reference_photos([])
+
+        assert count == 2
+        provider.client.index_faces.assert_not_called()
+
+    def test_collection_missing_raises_when_create_disabled(self, mock_aws_available, mock_image_file):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "missing-collection",
+            "collection_create_if_missing": False,
+        }
+        provider = AWSFaceRecognitionProvider(config)
+
+        error_response = {"Error": {"Code": "ResourceNotFoundException"}}
+        mock_error = mock_aws_available["ClientError"](error_response, "DescribeCollection")
+        mock_error.response = error_response
+        provider.client.describe_collection.side_effect = mock_error
+
+        with pytest.raises(ValueError):
+            provider.load_reference_photos([mock_image_file])
+
+    def test_collection_missing_id_raises(self, mock_aws_available, mock_image_file):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+        }
+        provider = AWSFaceRecognitionProvider(config)
+
+        with pytest.raises(ValueError):
+            provider.load_reference_photos([mock_image_file])
+
+    def test_collection_empty_and_no_refs_raises(self, provider):
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.list_faces.return_value = {"Faces": []}
+
+        with pytest.raises(Exception):
+            provider.load_reference_photos([])
+
+    def test_collection_missing_file_raises(self, provider):
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.list_faces.return_value = {"Faces": []}
+
+        with pytest.raises(Exception):
+            provider.load_reference_photos(["/missing/file.jpg"])
+
+    def test_collection_index_no_face_records(self, provider, mock_image_file, monkeypatch):
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.list_faces.return_value = {"Faces": []}
+
+        monkeypatch.setattr(
+            provider,
+            "_ensure_max_image_size",
+            lambda image_bytes, source: image_bytes,
+        )
+        monkeypatch.setattr(
+            provider,
+            "_verify_reference_photo_with_retry",
+            lambda image_bytes: {"FaceDetails": [{"Confidence": 99.0}]},
+        )
+        monkeypatch.setattr(
+            provider,
+            "_index_faces_with_retry",
+            lambda image_bytes, external_id: {"FaceRecords": []},
+        )
+
+        with pytest.raises(Exception):
+            provider.load_reference_photos([mock_image_file])
+
+    def test_collection_skip_existing_false_indexes_duplicates(self, mock_aws_available, mock_image_file):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "test-collection",
+            "collection_skip_existing": False,
+        }
+        provider = AWSFaceRecognitionProvider(config)
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
+        provider.client.index_faces.return_value = {"FaceRecords": [{"Face": {"FaceId": "face-1"}}]}
+
+        count = provider.load_reference_photos([mock_image_file])
+
+        assert count == 1
+        provider.client.list_faces.assert_not_called()
+        provider.client.index_faces.assert_called_once()
+
+
+class TestFaceCollectionHelpers:
+    """Test helper methods for face collections."""
+
+    @pytest.fixture
+    def provider(self, mock_aws_available):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "test-collection",
+        }
+        return AWSFaceRecognitionProvider(config)
+
+    def test_ensure_collection_exists_creates_when_missing(self, provider, mock_aws_available):
+        error_response = {"Error": {"Code": "ResourceNotFoundException"}}
+        mock_error = mock_aws_available["ClientError"](error_response, "DescribeCollection")
+        mock_error.response = error_response
+        provider.client.describe_collection.side_effect = mock_error
+
+        provider._ensure_collection_exists()
+
+        provider.client.create_collection.assert_called_once_with(CollectionId="test-collection")
+
+    def test_ensure_collection_exists_raises_other_errors(self, provider, mock_aws_available):
+        error_response = {"Error": {"Code": "AccessDeniedException"}}
+        mock_error = mock_aws_available["ClientError"](error_response, "DescribeCollection")
+        mock_error.response = error_response
+        provider.client.describe_collection.side_effect = mock_error
+
+        with pytest.raises(Exception):
+            provider._ensure_collection_exists()
+
+    def test_list_collection_external_ids_paginates(self, provider):
+        provider.client.list_faces.side_effect = [
+            {"Faces": [{"ExternalImageId": "face-a"}, {"ExternalImageId": None}], "NextToken": "next"},
+            {"Faces": [{"ExternalImageId": "face-b"}]},
+        ]
+
+        result = provider._list_collection_external_ids()
+
+        assert result == {"face-a", "face-b"}
+        assert provider.client.list_faces.call_count == 2
+
+    def test_build_external_image_id_collision(self, provider):
+        existing = {"person.jpg"}
+        external_id = provider._build_external_image_id("/tmp/person.jpg", existing)
+
+        assert external_id.startswith("person.jpg-")
+        assert len(external_id) > len("person.jpg-")
+
+    def test_build_external_image_id_truncates_long_name(self, provider):
+        long_name = "a" * 210 + ".jpg"
+        external_id = provider._build_external_image_id(f"/tmp/{long_name}", set())
+
+        assert len(external_id) <= 200
 
 
 class TestDetectFaces:
@@ -882,6 +1077,158 @@ class TestFindMatchesInImage:
         assert len(matches) == 0
         assert total_faces == 0
         provider.client.compare_faces.assert_not_called()
+
+
+class TestFindMatchesWithCollection:
+    """Test face collection matching."""
+
+    @pytest.fixture
+    def provider(self, mock_aws_available):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        config = {
+            "use_face_collection": True,
+            "face_collection_id": "test-collection",
+            "collection_max_faces": 3,
+        }
+        provider = AWSFaceRecognitionProvider(config)
+        provider.client.describe_collection.return_value = {"CollectionId": "test-collection"}
+        return provider
+
+    @pytest.fixture
+    def test_image_bytes(self):
+        import io
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 100), color="red")
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG")
+        return buffer.getvalue()
+
+    def test_find_matches_in_collection(self, provider, test_image_bytes):
+        provider.client.detect_faces.return_value = {"FaceDetails": [{"Confidence": 99.0}]}
+        provider.client.search_faces_by_image.return_value = {"FaceMatches": [{"Similarity": 88.0}, {"Similarity": 82.0}]}
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg", tolerance=85.0)
+
+        assert total_faces == 1
+        assert len(matches) == 1
+        assert matches[0].confidence == pytest.approx(0.88)
+        provider.client.search_faces_by_image.assert_called_once()
+        call_kwargs = provider.client.search_faces_by_image.call_args[1]
+        assert call_kwargs["CollectionId"] == "test-collection"
+        assert call_kwargs["FaceMatchThreshold"] == 85.0
+        assert call_kwargs["MaxFaces"] == 3
+
+    def test_find_matches_collection_missing_id(self, mock_aws_available, test_image_bytes):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        provider = AWSFaceRecognitionProvider({"use_face_collection": True})
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 0
+
+    def test_find_matches_collection_oversize_target(self, provider, test_image_bytes, monkeypatch):
+        from scripts.face_recognizer.providers.aws_provider import AWS_MAX_IMAGE_BYTES
+
+        monkeypatch.setattr(
+            provider,
+            "_ensure_max_image_size",
+            lambda image_bytes, source: b"x" * (AWS_MAX_IMAGE_BYTES + 1),
+        )
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 0
+
+    def test_find_matches_collection_detect_error(self, provider, test_image_bytes):
+        provider._detect_faces_with_retry = MagicMock(side_effect=Exception("detect error"))
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 0
+
+    def test_find_matches_collection_no_faces(self, provider, test_image_bytes):
+        provider._detect_faces_with_retry = MagicMock(return_value=[])
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 0
+
+    def test_find_matches_collection_search_client_error(self, provider, test_image_bytes, mock_aws_available):
+        from scripts.face_recognizer.base_provider import FaceEncoding
+
+        provider._detect_faces_with_retry = MagicMock(return_value=[FaceEncoding(encoding=np.array([]), source="test.jpg")])
+
+        error_response = {"Error": {"Code": "InternalServerError"}}
+        mock_error = mock_aws_available["ClientError"](error_response, "SearchFacesByImage")
+        mock_error.response = error_response
+        provider._search_faces_by_image_with_retry = MagicMock(side_effect=mock_error)
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 1
+
+    def test_find_matches_collection_search_generic_error(self, provider, test_image_bytes):
+        from scripts.face_recognizer.base_provider import FaceEncoding
+
+        provider._detect_faces_with_retry = MagicMock(return_value=[FaceEncoding(encoding=np.array([]), source="test.jpg")])
+        provider._search_faces_by_image_with_retry = MagicMock(side_effect=Exception("boom"))
+
+        matches, total_faces = provider.find_matches_in_image(test_image_bytes, source="test.jpg")
+
+        assert matches == []
+        assert total_faces == 1
+
+
+class TestAWSResizeHelpers:
+    """Test AWS image resize helpers."""
+
+    @pytest.fixture
+    def provider(self, mock_aws_available):
+        from scripts.face_recognizer.providers.aws_provider import AWSFaceRecognitionProvider
+
+        return AWSFaceRecognitionProvider({})
+
+    def test_ensure_max_image_size_returns_small_bytes(self, provider):
+        data = b"small"
+
+        assert provider._ensure_max_image_size(data, "small.jpg") == data
+
+    def test_load_image_for_resize_invalid_bytes(self, provider):
+        assert provider._load_image_for_resize(b"not-image", "bad.jpg") is None
+
+    def test_resize_image_bytes_returns_within_limit(self, provider, monkeypatch):
+        from PIL import Image
+
+        monkeypatch.setattr("scripts.face_recognizer.providers.aws_provider.AWS_MAX_IMAGE_BYTES", 20000)
+        monkeypatch.setattr("scripts.face_recognizer.providers.aws_provider.AWS_JPEG_QUALITY_STEPS", (85,))
+
+        image = Image.new("RGB", (200, 200), color="blue")
+
+        resized = provider._resize_image_bytes(image, "sample.jpg", b"fallback")
+
+        assert resized
+
+    def test_resize_image_bytes_returns_smallest_at_min_dim(self, provider, monkeypatch):
+        from PIL import Image
+
+        monkeypatch.setattr("scripts.face_recognizer.providers.aws_provider.AWS_MAX_IMAGE_BYTES", 10)
+        monkeypatch.setattr("scripts.face_recognizer.providers.aws_provider.AWS_MAX_IMAGE_DIMENSION", 300)
+        monkeypatch.setattr("scripts.face_recognizer.providers.aws_provider.AWS_JPEG_QUALITY_STEPS", (85,))
+
+        image = Image.new("RGB", (600, 600), color="green")
+
+        resized = provider._resize_image_bytes(image, "sample.jpg", b"fallback")
+
+        assert resized
 
 
 class TestPrecheckTargetFaces:

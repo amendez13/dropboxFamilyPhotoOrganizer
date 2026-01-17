@@ -4,6 +4,7 @@ Uses AWS Rekognition for face detection and comparison.
 """
 
 import base64
+import hashlib
 import logging
 import os
 import time
@@ -31,6 +32,7 @@ DEFAULT_MAX_DELAY = 30.0  # seconds
 AWS_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 AWS_MAX_IMAGE_DIMENSION = 1600
 AWS_JPEG_QUALITY_STEPS = (85, 80, 75, 70, 65)
+AWS_DEFAULT_COLLECTION_MAX_FACES = 5
 
 _VALIDATION_IMAGE_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAvElEQVR4nO3QQQkAMAzAwPo3vYq4xyjkFI"
@@ -153,6 +155,11 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
     - aws_secret_access_key: AWS secret key (or use AWS CLI config)
     - aws_region: AWS region (default: us-east-1)
     - similarity_threshold: Minimum similarity percentage (default: 80)
+    - use_face_collection: Enable face collection mode (default: false)
+    - face_collection_id: Collection ID for stored faces
+    - collection_create_if_missing: Create collection when missing (default: true)
+    - collection_skip_existing: Skip indexing if external ID already exists (default: true)
+    - collection_max_faces: Max matches returned per search (default: 5)
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -178,6 +185,15 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             raise Exception(f"Failed to initialize AWS Rekognition client: {e}")
 
         self.similarity_threshold = config.get("similarity_threshold", 80.0)
+        self.use_face_collection = bool(config.get("use_face_collection", False))
+        self.face_collection_id = config.get("face_collection_id") or config.get("collection_id")
+        self.collection_create_if_missing = bool(config.get("collection_create_if_missing", True))
+        self.collection_skip_existing = bool(config.get("collection_skip_existing", True))
+        max_faces = config.get("collection_max_faces", AWS_DEFAULT_COLLECTION_MAX_FACES)
+        try:
+            self.collection_max_faces = max(1, int(max_faces))
+        except (TypeError, ValueError):
+            self.collection_max_faces = AWS_DEFAULT_COLLECTION_MAX_FACES
 
         # AWS Rekognition doesn't use encodings like dlib
         # We store the reference image bytes for comparison
@@ -217,7 +233,11 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         Returns:
             Number of reference photos loaded
         """
+        if self.use_face_collection:
+            return self._load_reference_photos_to_collection(photo_paths)
+
         self.reference_images = []
+        self.reference_encodings = []
 
         for photo_path in photo_paths:
             if not os.path.exists(photo_path):
@@ -262,6 +282,94 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
         self.logger.info(f"Loaded {len(self.reference_images)} reference photo(s)")
         return len(self.reference_images)
+
+    def _load_reference_photos_to_collection(self, photo_paths: List[str]) -> int:
+        self.reference_images = []
+        self.reference_encodings = []
+
+        if not self.face_collection_id:
+            raise ValueError("face_collection_id must be set when use_face_collection is enabled")
+
+        self._ensure_collection_exists()
+
+        existing_external_ids: set[str] = set()
+        if self.collection_skip_existing:
+            existing_external_ids = self._list_collection_external_ids()
+
+        loaded_count = 0
+        if not photo_paths:
+            if existing_external_ids:
+                loaded_count = len(existing_external_ids)
+                self.logger.info(f"Using existing AWS face collection with {loaded_count} face(s): {self.face_collection_id}")
+                return loaded_count
+            raise Exception("No reference photos provided and collection is empty")
+
+        for photo_path in photo_paths:
+            if self._index_reference_photo_to_collection(photo_path, existing_external_ids):
+                loaded_count += 1
+
+        if loaded_count == 0:
+            raise Exception("No reference photos could be loaded")
+
+        self.logger.info(f"Loaded {loaded_count} reference photo(s) into collection")
+        return loaded_count
+
+    def _index_reference_photo_to_collection(self, photo_path: str, existing_external_ids: set[str]) -> bool:
+        if not os.path.exists(photo_path):
+            self.logger.warning(f"Reference photo not found: {photo_path}")
+            return False
+
+        base_name = self._normalized_external_base_name(photo_path)
+        if self.collection_skip_existing and base_name in existing_external_ids:
+            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path, confidence=None))
+            self.logger.info(f"Reference already indexed in collection: {photo_path}")
+            return True
+
+        external_id = self._build_external_image_id(photo_path, existing_external_ids)
+        if self.collection_skip_existing and external_id in existing_external_ids:
+            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path, confidence=None))
+            self.logger.info(f"Reference already indexed in collection: {photo_path}")
+            return True
+
+        try:
+            with open(photo_path, "rb") as f:
+                image_bytes = f.read()
+
+            image_bytes = self._ensure_max_image_size(image_bytes, photo_path)
+            if len(image_bytes) > AWS_MAX_IMAGE_BYTES:
+                self.logger.error(f"Unable to resize reference photo under 5MB, skipping: {photo_path}")
+                return False
+
+            response = self._verify_reference_photo_with_retry(image_bytes)
+            face_details = response.get("FaceDetails", [])
+
+            if not face_details:
+                self.logger.warning(f"No faces found in reference photo: {photo_path}")
+                return False
+
+            if len(face_details) > 1:
+                self.logger.warning(f"Multiple faces found in reference photo (AWS requires exactly one): {photo_path}")
+                return False
+
+            index_response = self._index_faces_with_retry(image_bytes, external_id)
+            face_records = index_response.get("FaceRecords", [])
+            if not face_records:
+                self.logger.warning(f"No faces indexed for reference photo: {photo_path}")
+                return False
+
+            self.reference_encodings.append(FaceEncoding(encoding=np.array([]), source=photo_path, confidence=None))
+            existing_external_ids.add(external_id)
+            self.logger.info(f"Indexed reference photo into collection: {photo_path}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error loading reference photo {photo_path}: {e}")
+            return False
+
+    def _normalized_external_base_name(self, photo_path: str) -> str:
+        base_name = os.path.basename(photo_path).strip() or "reference"
+        if len(base_name) > 200:
+            base_name = base_name[:200]
+        return base_name
 
     @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
     def _verify_reference_photo_with_retry(self, image_bytes: bytes) -> Dict[str, Any]:
@@ -346,6 +454,9 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         if tolerance is None:
             tolerance = self.similarity_threshold
 
+        if self.use_face_collection:
+            return self._find_matches_in_collection(image_data, source, tolerance)
+
         image_data = self._ensure_max_image_size(image_data, source)
         if len(image_data) > AWS_MAX_IMAGE_BYTES:
             self.logger.error(f"Unable to resize target image under 5MB, skipping: {source}")
@@ -381,6 +492,56 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
 
         return unique_matches, total_faces
 
+    def _find_matches_in_collection(self, image_data: bytes, source: str, tolerance: float) -> Tuple[List[FaceMatch], int]:
+        if not self.face_collection_id:
+            self.logger.error("face_collection_id must be set to use AWS face collections")
+            return [], 0
+
+        image_data = self._ensure_max_image_size(image_data, source)
+        if len(image_data) > AWS_MAX_IMAGE_BYTES:
+            self.logger.error(f"Unable to resize target image under 5MB, skipping: {source}")
+            return [], 0
+
+        try:
+            detected_faces = self._detect_faces_with_retry(image_data, source)
+        except Exception as e:
+            self.logger.error(f"Error detecting faces for {source}: {e}")
+            return [], 0
+
+        if not detected_faces:
+            self.logger.info(f"No faces detected in target image, skipping: {source}")
+            return [], 0
+
+        total_faces = len(detected_faces)
+
+        try:
+            response = self._search_faces_by_image_with_retry(image_data, tolerance)
+        except ClientError as e:
+            error = getattr(e, "response", {}).get("Error", {})
+            code = error.get("Code", "Unknown")
+            message = error.get("Message", str(e))
+            self.logger.error(f"Error searching faces for {source}: {code}: {message}")
+            return [], total_faces
+        except Exception as e:
+            self.logger.error(f"Error searching faces for {source}: {e}")
+            return [], total_faces
+
+        matches: List[FaceMatch] = []
+        for match in response.get("FaceMatches", []):
+            similarity = match.get("Similarity", 0.0)
+            confidence = similarity / 100.0
+            matches.append(
+                FaceMatch(
+                    is_match=True,
+                    confidence=confidence,
+                    distance=1.0 - confidence,
+                    matched_encoding=None,
+                )
+            )
+
+        unique_matches = matches[:1] if matches else []
+        return unique_matches, total_faces
+
     @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
     def _compare_faces_with_retry(self, ref_image: bytes, image_data: bytes, tolerance: float) -> Dict[str, Any]:
         """Internal method for compare_faces API call with retry support."""
@@ -388,6 +549,71 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             SourceImage={"Bytes": ref_image}, TargetImage={"Bytes": image_data}, SimilarityThreshold=tolerance
         )
         return response
+
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
+    def _search_faces_by_image_with_retry(self, image_data: bytes, tolerance: float) -> Dict[str, Any]:
+        response: Dict[str, Any] = self.client.search_faces_by_image(
+            CollectionId=self.face_collection_id,
+            Image={"Bytes": image_data},
+            FaceMatchThreshold=tolerance,
+            MaxFaces=self.collection_max_faces,
+        )
+        return response
+
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
+    def _index_faces_with_retry(self, image_bytes: bytes, external_id: str) -> Dict[str, Any]:
+        response: Dict[str, Any] = self.client.index_faces(
+            CollectionId=self.face_collection_id,
+            Image={"Bytes": image_bytes},
+            ExternalImageId=external_id,
+            DetectionAttributes=["DEFAULT"],
+            MaxFaces=1,
+        )
+        return response
+
+    def _ensure_collection_exists(self) -> None:
+        try:
+            self.client.describe_collection(CollectionId=self.face_collection_id)
+            return
+        except ClientError as e:
+            error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+            if error_code != "ResourceNotFoundException":
+                raise
+            if not self.collection_create_if_missing:
+                raise ValueError(f"AWS face collection does not exist: {self.face_collection_id}")
+
+        self.client.create_collection(CollectionId=self.face_collection_id)
+        self.logger.info(f"Created AWS face collection: {self.face_collection_id}")
+
+    def _list_collection_external_ids(self) -> set[str]:
+        external_ids: set[str] = set()
+        next_token: Optional[str] = None
+
+        while True:
+            kwargs: Dict[str, Any] = {"CollectionId": self.face_collection_id, "MaxResults": 4096}
+            if next_token:
+                kwargs["NextToken"] = next_token
+
+            response = self.client.list_faces(**kwargs)
+            for face in response.get("Faces", []):
+                external_id = face.get("ExternalImageId")
+                if external_id:
+                    external_ids.add(external_id)
+
+            next_token = response.get("NextToken")
+            if not next_token:
+                break
+
+        return external_ids
+
+    def _build_external_image_id(self, photo_path: str, existing_ids: set[str]) -> str:
+        base_name = self._normalized_external_base_name(photo_path)
+
+        if base_name not in existing_ids:
+            return base_name
+
+        digest = hashlib.sha256(photo_path.encode("utf-8")).hexdigest()[:10]
+        return f"{base_name}-{digest}"
 
     def _ensure_max_image_size(self, image_bytes: bytes, source: str) -> bytes:
         if len(image_bytes) <= AWS_MAX_IMAGE_BYTES:

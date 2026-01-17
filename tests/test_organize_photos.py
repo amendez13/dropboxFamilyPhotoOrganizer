@@ -1014,6 +1014,7 @@ processing:
 
         # Mock get_provider
         mock_provider = Mock()
+        mock_provider.use_face_collection = False
         organize_photos_module.get_provider = Mock(return_value=mock_provider)
 
         try:
@@ -1024,6 +1025,62 @@ processing:
             assert any("No reference photos found" in str(call) for call in mock_logger.error.call_args_list)
         finally:
             # Cleanup the mock
+            if "scripts.auth.client_factory" in sys.modules:
+                del sys.modules["scripts.auth.client_factory"]
+
+    def test_main_no_reference_photos_with_collection(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
+        """Test main uses face collection when no local reference photos exist."""
+        config_file = tmp_path / "config.yaml"
+        ref_photos_dir = tmp_path / "reference_photos"
+        ref_photos_dir.mkdir()
+
+        config_file.write_text(
+            f"""
+dropbox:
+  source_folder: /Photos/Source
+  destination_folder: /Photos/Dest
+face_recognition:
+  provider: aws
+  reference_photos_dir: {ref_photos_dir}
+processing:
+  dry_run: true
+"""
+        )
+
+        mock_args = Mock()
+        mock_args.config = str(config_file)
+        mock_args.move = False
+        mock_args.dry_run = True
+        mock_args.verbose = False
+        mock_args.log_file = "operations.log"
+
+        mock_parser = Mock()
+        mock_parser.parse_args.return_value = mock_args
+        organize_photos_module.argparse.ArgumentParser = Mock(return_value=mock_parser)
+
+        organize_photos_module.setup_logging = Mock()
+        mock_logger = Mock()
+        organize_photos_module.get_logger = Mock(return_value=mock_logger)
+
+        mock_factory_class = Mock()
+        mock_client = Mock()
+        mock_client.list_folder_recursive.return_value = []
+        mock_factory_class.return_value.create_client.return_value = mock_client
+        sys.modules["scripts.auth.client_factory"] = Mock(DropboxClientFactory=mock_factory_class)
+
+        mock_provider = Mock()
+        mock_provider.use_face_collection = True
+        mock_provider.face_collection_id = "collection-1"
+        mock_provider.load_reference_photos.return_value = 2
+        organize_photos_module.get_provider = Mock(return_value=mock_provider)
+
+        try:
+            result = organize_photos_module.main()
+
+            assert result == 0
+            mock_provider.load_reference_photos.assert_called_once_with([])
+            assert any("collection-1" in str(call) for call in mock_logger.warning.call_args_list)
+        finally:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
 

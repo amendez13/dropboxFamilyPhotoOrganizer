@@ -527,12 +527,20 @@ def main() -> int:
         reference_photos = _get_reference_photos(reference_photos_dir, image_extensions)
 
         if not reference_photos:
-            logger.error(f"No reference photos found in {reference_photos_dir}")
-            logger.error("Please add reference photos and run scripts/train_face_model.py first")
-            return 1
-
-        num_faces = provider.load_reference_photos(reference_photos)
-        logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
+            if getattr(provider, "use_face_collection", False):
+                num_faces = provider.load_reference_photos([])
+                collection_id = getattr(provider, "face_collection_id", "unknown")
+                logger.warning(
+                    f"No local reference photos found; using AWS face collection '{collection_id}' "
+                    f"with {num_faces} face(s)"
+                )
+            else:
+                logger.error(f"No reference photos found in {reference_photos_dir}")
+                logger.error("Please add reference photos and run scripts/train_face_model.py first")
+                return 1
+        else:
+            num_faces = provider.load_reference_photos(reference_photos)
+            logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
 
         # List files in source folder
         logger.info(f"Scanning {source_folder} for photos...")
