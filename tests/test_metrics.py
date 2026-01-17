@@ -5,10 +5,7 @@ Unit tests for metrics collection module.
 import json
 import os
 import tempfile
-from datetime import datetime, timedelta
 from unittest.mock import MagicMock
-
-import pytest
 
 from scripts.metrics import MetricsCollector
 
@@ -235,23 +232,45 @@ class TestMetricsCollector:
         assert summary["face_statistics"]["avg_faces_per_image"] == 0
         assert summary["face_statistics"]["max_faces_per_image"] == 0
 
-    def test_save_to_file(self):
-        """Test saving metrics to JSON file."""
+    def test_save_to_file_with_timestamp(self):
+        """Test saving metrics to JSON file with timestamp."""
         collector = MetricsCollector()
         collector.increment_api_call("detect_faces", count=10)
         collector.record_face_detection(num_faces=3, num_matches=1)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = os.path.join(tmpdir, "metrics.json")
-            collector.save_to_file(filepath)
+            actual_path = collector.save_to_file(filepath, use_timestamp=True)
 
-            assert os.path.exists(filepath)
+            # Should return the actual path with timestamp
+            assert actual_path is not None
+            assert actual_path != filepath
+            assert "metrics_" in actual_path
+            assert actual_path.endswith(".json")
+            assert os.path.exists(actual_path)
 
-            with open(filepath, "r") as f:
+            # Check symlink was created
+            symlink_path = os.path.join(tmpdir, "metrics_latest.json")
+            assert os.path.islink(symlink_path)
+
+            with open(actual_path, "r") as f:
                 data = json.load(f)
 
             assert data["api_calls"]["detect_faces"] == 10
             assert data["face_statistics"]["total_detected"] == 3
+
+    def test_save_to_file_without_timestamp(self):
+        """Test saving metrics without timestamp (overwrite mode)."""
+        collector = MetricsCollector()
+        collector.increment_api_call("detect_faces", count=10)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "metrics.json")
+            actual_path = collector.save_to_file(filepath, use_timestamp=False)
+
+            # Should return exact filepath
+            assert actual_path == filepath
+            assert os.path.exists(filepath)
 
     def test_save_to_file_creates_directory(self):
         """Test that save_to_file creates directory if it doesn't exist."""
@@ -260,9 +279,53 @@ class TestMetricsCollector:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = os.path.join(tmpdir, "logs", "metrics.json")
-            collector.save_to_file(filepath)
+            actual_path = collector.save_to_file(filepath, use_timestamp=False)
 
-            assert os.path.exists(filepath)
+            assert actual_path is not None
+            assert os.path.exists(actual_path)
+
+    def test_save_to_file_historical_tracking(self):
+        """Test that multiple saves create separate timestamped files."""
+        import time
+
+        collector1 = MetricsCollector()
+        collector1.increment_api_call("detect_faces", count=5)
+
+        collector2 = MetricsCollector()
+        collector2.increment_api_call("detect_faces", count=10)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "metrics.json")
+
+            path1 = collector1.save_to_file(filepath, use_timestamp=True)
+            time.sleep(1.1)  # Ensure different timestamp
+            path2 = collector2.save_to_file(filepath, use_timestamp=True)
+
+            # Both files should exist with different names
+            assert path1 != path2
+            assert os.path.exists(path1)
+            assert os.path.exists(path2)
+
+            # Latest symlink should point to second file
+            symlink_path = os.path.join(tmpdir, "metrics_latest.json")
+            assert os.path.islink(symlink_path)
+            assert os.readlink(symlink_path) == os.path.basename(path2)
+
+    def test_save_to_file_no_symlink(self):
+        """Test saving without creating symlink."""
+        collector = MetricsCollector()
+        collector.increment_api_call("detect_faces", count=5)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "metrics.json")
+            actual_path = collector.save_to_file(filepath, use_timestamp=True, create_latest_symlink=False)
+
+            assert actual_path is not None
+            assert os.path.exists(actual_path)
+
+            # No symlink should be created
+            symlink_path = os.path.join(tmpdir, "metrics_latest.json")
+            assert not os.path.exists(symlink_path)
 
     def test_log_summary(self):
         """Test logging metrics summary."""

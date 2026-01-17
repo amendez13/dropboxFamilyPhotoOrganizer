@@ -264,23 +264,76 @@ class MetricsCollector:
 
         log.info("=" * 70)
 
-    def save_to_file(self, filepath: str) -> None:
+    def save_to_file(
+        self,
+        filepath: str,
+        use_timestamp: bool = True,
+        create_latest_symlink: bool = True,
+    ) -> Optional[str]:
         """
-        Save metrics to a JSON file.
+        Save metrics to a JSON file with optional timestamping for historical tracking.
 
         Args:
-            filepath: Path to the output JSON file
+            filepath: Path to the output JSON file (e.g., "logs/aws_metrics.json")
+            use_timestamp: If True, inserts timestamp before extension
+                          (e.g., "logs/aws_metrics_20260117_103045.json")
+            create_latest_symlink: If True, creates/updates a "latest" symlink
+
+        Returns:
+            The actual filepath where metrics were saved, or None on error
         """
         # Ensure directory exists
         directory = os.path.dirname(os.path.abspath(filepath))
         if directory:
             os.makedirs(directory, exist_ok=True)
 
+        # Generate timestamped filename if requested
+        actual_filepath = filepath
+        if use_timestamp:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base, ext = os.path.splitext(filepath)
+            actual_filepath = f"{base}_{timestamp}{ext}"
+
         summary = self.get_summary()
 
         try:
-            with open(filepath, "w") as f:
+            with open(actual_filepath, "w") as f:
                 json.dump(summary, f, indent=2)
-            self.logger.info(f"Metrics saved to {filepath}")
+            self.logger.info(f"Metrics saved to {actual_filepath}")
+
+            # Create/update "latest" symlink for convenience
+            if use_timestamp and create_latest_symlink:
+                self._create_latest_symlink(filepath, actual_filepath)
+
+            return actual_filepath
         except Exception as e:
-            self.logger.error(f"Failed to save metrics to {filepath}: {e}")
+            self.logger.error(f"Failed to save metrics to {actual_filepath}: {e}")
+            return None
+
+    def _create_latest_symlink(self, base_filepath: str, actual_filepath: str) -> None:
+        """
+        Create or update a symlink pointing to the latest metrics file.
+
+        Args:
+            base_filepath: Original filepath (e.g., "logs/aws_metrics.json")
+            actual_filepath: Timestamped filepath that was written
+        """
+        base, ext = os.path.splitext(base_filepath)
+        symlink_path = f"{base}_latest{ext}"
+
+        try:
+            # Remove existing symlink if present
+            if os.path.islink(symlink_path):
+                os.unlink(symlink_path)
+            elif os.path.exists(symlink_path):
+                # It's a regular file, don't overwrite
+                self.logger.warning(f"Cannot create latest symlink: {symlink_path} exists as regular file")
+                return
+
+            # Create relative symlink
+            actual_filename = os.path.basename(actual_filepath)
+            os.symlink(actual_filename, symlink_path)
+            self.logger.debug(f"Updated latest symlink: {symlink_path} -> {actual_filename}")
+        except OSError as e:
+            # Symlinks may not be supported on all platforms
+            self.logger.debug(f"Could not create symlink {symlink_path}: {e}")
