@@ -558,7 +558,22 @@ face_recognition:
 After each run, metrics are:
 
 1. **Logged to console**: Summary displayed at the end of processing
-2. **Saved to JSON file**: `logs/aws_metrics.json` for later analysis
+2. **Saved to timestamped JSON file**: Each run creates a new file with historical tracking
+
+**Historical Metrics Tracking:**
+
+Each run creates a timestamped metrics file, preserving history:
+```
+logs/
+  aws_metrics_20260115_103045.json   # First run
+  aws_metrics_20260115_143022.json   # Second run
+  aws_metrics_20260116_091530.json   # Third run
+  aws_metrics_latest.json            # Symlink to most recent
+```
+
+- Files are never overwritten - each run creates a new timestamped file
+- A `_latest.json` symlink always points to the most recent metrics
+- Use this history to track usage patterns and costs over time
 
 Example metrics output:
 ```
@@ -631,7 +646,22 @@ Review metrics to optimize costs:
 - **High detect_faces count**: Consider pre-filtering images before processing
 - **Low match rate**: Adjust similarity threshold or improve reference photos
 - **Many images without faces**: Filter images by metadata before processing
-- **Cost trends**: Compare metrics across runs to track spending
+- **Cost trends**: Compare timestamped metrics files to track spending over time
+
+**Analyzing Historical Metrics:**
+
+```bash
+# List all metrics files by date
+ls -lt logs/aws_metrics_*.json
+
+# View latest metrics
+cat logs/aws_metrics_latest.json | jq .cost_estimate
+
+# Compare costs across runs
+for f in logs/aws_metrics_202601*.json; do
+  echo "$f: $(cat $f | jq -r '.cost_estimate.amount // 0') USD"
+done
+```
 
 ---
 
