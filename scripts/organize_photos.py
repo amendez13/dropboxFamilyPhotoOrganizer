@@ -60,6 +60,7 @@ def _finalize_metrics(
     logger.info("")
     metrics_collector.log_summary(logger)
     metrics_collector.save_to_file("logs/aws_metrics.json")
+    metrics_collector.append_to_monthly_costs("logs")
 
 
 def setup_audit_logging(log_file: str) -> logging.Logger:
@@ -459,13 +460,16 @@ def _setup_face_provider(face_config: Dict[str, Any], tolerance: float, logger: 
     recognition_config = local_config.get("recognition", {})
     recognition_num_jitters = recognition_config.get("num_jitters", local_config.get("num_jitters", 1))
 
-    # Build config for provider with recognition parameters
-    provider_config = {
-        "model": local_config.get("model", "hog"),
-        "encoding_model": local_config.get("encoding_model", "large"),
-        "num_jitters": recognition_num_jitters,
-        "tolerance": tolerance,
-    }
+    # Build config for provider: start with provider-specific config, then add common settings
+    provider_config = dict(local_config)  # Copy all provider-specific settings (e.g., AWS collection config)
+    provider_config.update(
+        {
+            "model": local_config.get("model", "hog"),
+            "encoding_model": local_config.get("encoding_model", "large"),
+            "num_jitters": recognition_num_jitters,
+            "tolerance": tolerance,
+        }
+    )
 
     logger.info(f"  Detection model: {provider_config['model']}")
     logger.info(f"  Encoding model: {provider_config['encoding_model']}")

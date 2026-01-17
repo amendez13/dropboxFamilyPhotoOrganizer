@@ -345,6 +345,20 @@ class TestMetricsCollector:
         # Verify logger was called
         assert mock_logger.info.called
 
+    def test_log_summary_without_pricing(self):
+        """Test logging metrics summary without pricing configuration."""
+        collector = MetricsCollector()  # No pricing config
+
+        collector.increment_api_call("detect_faces", count=100)
+        collector.record_face_detection(num_faces=5, num_matches=2)
+
+        mock_logger = MagicMock()
+        collector.log_summary(logger=mock_logger)
+
+        # Should log "Cost Estimate: Not configured"
+        log_calls = [str(call) for call in mock_logger.info.call_args_list]
+        assert any("Not configured" in str(call) for call in log_calls)
+
     def test_complete_workflow_compare_faces_mode(self):
         """Test complete workflow for CompareFaces mode."""
         pricing = {
@@ -440,3 +454,191 @@ class TestMetricsCollector:
         # Total: $0.073
         assert summary["cost_estimate"] is not None
         assert abs(summary["cost_estimate"]["amount"] - 0.073) < 0.001
+
+    def test_append_to_monthly_costs_creates_new_file(self):
+        """Test that append_to_monthly_costs creates a new monthly file."""
+        pricing = {"currency": "USD", "detect_faces_per_1000": 1.0}
+        collector = MetricsCollector(pricing_config=pricing)
+
+        collector.increment_api_call("detect_faces", count=100)
+        collector.record_image_processed(has_faces=True, has_matches=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = collector.append_to_monthly_costs(logs_dir=tmpdir)
+
+            assert filepath is not None
+            assert os.path.exists(filepath)
+            assert "aws_costs_" in filepath
+            assert filepath.endswith(".json")
+
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            assert data["run_count"] == 1
+            assert data["currency"] == "USD"
+            assert abs(data["total_cost"] - 0.1) < 0.001
+            assert data["total_api_calls"] == 100
+            assert len(data["runs"]) == 1
+            assert data["runs"][0]["images_processed"] == 1
+            assert data["runs"][0]["matches_found"] == 1
+
+    def test_append_to_monthly_costs_appends_to_existing(self):
+        """Test that append_to_monthly_costs appends to existing monthly file."""
+        pricing = {"currency": "USD", "detect_faces_per_1000": 1.0}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # First run
+            collector1 = MetricsCollector(pricing_config=pricing)
+            collector1.increment_api_call("detect_faces", count=100)
+            collector1.record_image_processed(has_faces=True, has_matches=True)
+            filepath1 = collector1.append_to_monthly_costs(logs_dir=tmpdir)
+
+            # Second run
+            collector2 = MetricsCollector(pricing_config=pricing)
+            collector2.increment_api_call("detect_faces", count=50)
+            collector2.record_image_processed(has_faces=True, has_matches=False)
+            filepath2 = collector2.append_to_monthly_costs(logs_dir=tmpdir)
+
+            # Should be same file
+            assert filepath1 == filepath2
+
+            with open(filepath2, "r") as f:
+                data = json.load(f)
+
+            assert data["run_count"] == 2
+            assert abs(data["total_cost"] - 0.15) < 0.001  # $0.10 + $0.05
+            assert data["total_api_calls"] == 150  # 100 + 50
+            assert len(data["runs"]) == 2
+            assert data["runs"][0]["cost"] == 0.1
+            assert data["runs"][1]["cost"] == 0.05
+
+    def test_append_to_monthly_costs_without_pricing(self):
+        """Test that append_to_monthly_costs returns None without pricing."""
+        collector = MetricsCollector()  # No pricing config
+        collector.increment_api_call("detect_faces", count=100)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = collector.append_to_monthly_costs(logs_dir=tmpdir)
+
+            assert filepath is None
+            # No file should be created
+            assert len(os.listdir(tmpdir)) == 0
+
+    def test_append_to_monthly_costs_handles_corrupted_file(self):
+        """Test that append_to_monthly_costs handles corrupted JSON gracefully."""
+        pricing = {"currency": "USD", "detect_faces_per_1000": 1.0}
+        collector = MetricsCollector(pricing_config=pricing)
+        collector.increment_api_call("detect_faces", count=100)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a corrupted file
+            from datetime import datetime
+
+            year_month = datetime.now().strftime("%Y-%m")
+            corrupted_path = os.path.join(tmpdir, f"aws_costs_{year_month}.json")
+            with open(corrupted_path, "w") as f:
+                f.write("{ invalid json }")
+
+            # Should still work, creating fresh structure
+            filepath = collector.append_to_monthly_costs(logs_dir=tmpdir)
+
+            assert filepath is not None
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            assert data["run_count"] == 1
+            assert len(data["runs"]) == 1
+
+    def test_append_to_monthly_costs_api_breakdown(self):
+        """Test that API breakdown is correctly recorded in monthly costs."""
+        pricing = {
+            "currency": "USD",
+            "detect_faces_per_1000": 1.0,
+            "search_faces_per_1000": 1.0,
+        }
+        collector = MetricsCollector(pricing_config=pricing)
+
+        collector.increment_api_call("detect_faces", count=23)
+        collector.increment_api_call("search_faces", count=17)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = collector.append_to_monthly_costs(logs_dir=tmpdir)
+
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            run = data["runs"][0]
+            assert run["api_calls"] == 40
+            assert run["api_breakdown"]["detect_faces"] == 23
+            assert run["api_breakdown"]["search_faces"] == 17
+            # Zero-count operations should not be included
+            assert "compare_faces" not in run["api_breakdown"]
+
+    def test_append_to_monthly_costs_creates_directory(self):
+        """Test that append_to_monthly_costs creates logs directory if missing."""
+        pricing = {"currency": "USD", "detect_faces_per_1000": 1.0}
+        collector = MetricsCollector(pricing_config=pricing)
+        collector.increment_api_call("detect_faces", count=10)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logs_dir = os.path.join(tmpdir, "nested", "logs")
+            filepath = collector.append_to_monthly_costs(logs_dir=logs_dir)
+
+            assert filepath is not None
+            assert os.path.exists(filepath)
+            assert os.path.isdir(logs_dir)
+
+    def test_save_to_file_returns_none_on_write_error(self):
+        """Test that save_to_file returns None when write fails."""
+        from unittest.mock import patch
+
+        collector = MetricsCollector()
+        collector.increment_api_call("detect_faces", count=5)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "metrics.json")
+
+            # Mock open to raise an exception during write
+            with patch("builtins.open", side_effect=PermissionError("Mock permission error")):
+                result = collector.save_to_file(filepath, use_timestamp=False)
+
+            assert result is None
+
+    def test_symlink_not_created_when_regular_file_exists(self):
+        """Test that symlink is not created if a regular file with that name exists."""
+        collector = MetricsCollector()
+        collector.increment_api_call("detect_faces", count=5)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "metrics.json")
+            symlink_path = os.path.join(tmpdir, "metrics_latest.json")
+
+            # Create a regular file where the symlink would go
+            with open(symlink_path, "w") as f:
+                f.write("existing file")
+
+            # Save metrics - should not overwrite the regular file
+            actual_path = collector.save_to_file(filepath, use_timestamp=True)
+
+            assert actual_path is not None
+            # The "symlink" should still be a regular file, not a symlink
+            assert not os.path.islink(symlink_path)
+            # And should still contain original content
+            with open(symlink_path, "r") as f:
+                assert f.read() == "existing file"
+
+    def test_append_to_monthly_costs_handles_write_error(self):
+        """Test that append_to_monthly_costs handles write errors gracefully."""
+        from unittest.mock import patch
+
+        pricing = {"currency": "USD", "detect_faces_per_1000": 1.0}
+        collector = MetricsCollector(pricing_config=pricing)
+        collector.increment_api_call("detect_faces", count=10)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Mock open to raise IOError on write
+            with patch("builtins.open", side_effect=IOError("Mock write error")):
+                result = collector.append_to_monthly_costs(logs_dir=tmpdir)
+
+            # Should return None on error
+            assert result is None

@@ -337,3 +337,86 @@ class MetricsCollector:
         except OSError as e:
             # Symlinks may not be supported on all platforms
             self.logger.debug(f"Could not create symlink {symlink_path}: {e}")
+
+    def append_to_monthly_costs(self, logs_dir: str = "logs") -> Optional[str]:
+        """
+        Append this run's cost to a monthly aggregate file.
+
+        Creates or updates a file named aws_costs_YYYY-MM.json with:
+        - Individual run entries with timestamp, cost, and stats
+        - Running monthly total
+
+        Args:
+            logs_dir: Directory for log files (default: "logs")
+
+        Returns:
+            Path to the monthly costs file, or None on error
+        """
+        cost = self.calculate_cost()
+        if cost is None:
+            self.logger.debug("Skipping monthly cost tracking: pricing not configured")
+            return None
+
+        # Ensure directory exists
+        os.makedirs(logs_dir, exist_ok=True)
+
+        # Generate filename based on current year-month
+        now = datetime.now()
+        year_month = now.strftime("%Y-%m")
+        filepath = os.path.join(logs_dir, f"aws_costs_{year_month}.json")
+
+        # Load existing data or create new structure
+        monthly_data: Dict[str, Any]
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r") as f:
+                    monthly_data = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.warning(f"Could not read existing monthly file, creating new: {e}")
+                monthly_data = self._create_monthly_structure(year_month)
+        else:
+            monthly_data = self._create_monthly_structure(year_month)
+
+        # Create run entry
+        currency = self.pricing_config.get("currency", "USD")
+        run_entry = {
+            "timestamp": now.isoformat(),
+            "cost": round(cost, 6),
+            "api_calls": sum(self.api_calls.values()),
+            "api_breakdown": {k: v for k, v in self.api_calls.items() if v > 0},
+            "images_processed": self.images_processed,
+            "matches_found": self.images_with_matches,
+        }
+
+        # Append run and update totals
+        monthly_data["runs"].append(run_entry)
+        monthly_data["total_cost"] = round(sum(run["cost"] for run in monthly_data["runs"]), 6)
+        monthly_data["total_api_calls"] = sum(run["api_calls"] for run in monthly_data["runs"])
+        monthly_data["run_count"] = len(monthly_data["runs"])
+        monthly_data["last_updated"] = now.isoformat()
+        monthly_data["currency"] = currency
+
+        # Save updated data
+        try:
+            with open(filepath, "w") as f:
+                json.dump(monthly_data, f, indent=2)
+            self.logger.info(
+                f"Monthly costs updated: {filepath} "
+                f"(Run: ${cost:.4f}, Month total: ${monthly_data['total_cost']:.4f} {currency})"
+            )
+            return filepath
+        except IOError as e:
+            self.logger.error(f"Failed to save monthly costs to {filepath}: {e}")
+            return None
+
+    def _create_monthly_structure(self, year_month: str) -> Dict[str, Any]:
+        """Create a new monthly cost tracking structure."""
+        return {
+            "year_month": year_month,
+            "currency": self.pricing_config.get("currency", "USD"),
+            "total_cost": 0.0,
+            "total_api_calls": 0,
+            "run_count": 0,
+            "last_updated": None,
+            "runs": [],
+        }
