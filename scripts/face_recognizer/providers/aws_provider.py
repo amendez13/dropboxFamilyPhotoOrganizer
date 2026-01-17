@@ -466,16 +466,21 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         Args:
             image_data: Raw image bytes
             source: Image source identifier
-            tolerance: Similarity threshold percentage (0-100)
+            tolerance: Similarity threshold percentage (0-100). Values < 1.0 are
+                       assumed to be from local provider's 0-1 scale and will be
+                       ignored in favor of self.similarity_threshold.
 
         Returns:
             Tuple of (list of matches, total faces detected)
         """
-        if tolerance is None:
-            tolerance = self.similarity_threshold
+        # AWS uses 0-100 scale. If tolerance < 1.0, it's likely from local provider's
+        # 0-1 scale, so use our configured similarity_threshold instead.
+        effective_tolerance: float = self.similarity_threshold
+        if tolerance is not None and tolerance >= 1.0:
+            effective_tolerance = tolerance
 
         if self.use_face_collection:
-            return self._find_matches_in_collection(image_data, source, tolerance)
+            return self._find_matches_in_collection(image_data, source, effective_tolerance)
 
         image_data = self._ensure_max_image_size(image_data, source)
         if len(image_data) > AWS_MAX_IMAGE_BYTES:
@@ -491,7 +496,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         # Compare against each reference image
         for ref_image in self.reference_images:
             try:
-                response = self._compare_faces_with_retry(ref_image, image_data, tolerance)
+                response = self._compare_faces_with_retry(ref_image, image_data, effective_tolerance)
 
                 # Count all faces in target image
                 total_faces = max(total_faces, self._count_faces_in_response(response))
@@ -513,6 +518,7 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
         return unique_matches, total_faces
 
     def _find_matches_in_collection(self, image_data: bytes, source: str, tolerance: float) -> Tuple[List[FaceMatch], int]:
+        """Find face matches using AWS face collection."""
         if not self.face_collection_id:
             self.logger.error("face_collection_id must be set to use AWS face collections")
             return [], 0
@@ -522,45 +528,73 @@ class AWSFaceRecognitionProvider(BaseFaceRecognitionProvider):
             self.logger.error(f"Unable to resize target image under 5MB, skipping: {source}")
             return [], 0
 
+        total_faces = self._detect_faces_count(image_data, source)
+        if total_faces == 0:
+            return [], 0
+
+        face_matches = self._search_collection_for_faces(image_data, source, total_faces)
+        if face_matches is None:
+            return [], total_faces
+
+        return self._process_collection_matches(face_matches, source, tolerance, total_faces)
+
+    def _detect_faces_count(self, image_data: bytes, source: str) -> int:
+        """Detect faces in image and return count. Returns 0 on error or no faces."""
         try:
             detected_faces = self._detect_faces_with_retry(image_data, source)
         except Exception as e:
             self.logger.error(f"Error detecting faces for {source}: {e}")
-            return [], 0
+            return 0
 
         if not detected_faces:
             self.logger.info(f"No faces detected in target image, skipping: {source}")
-            return [], 0
+            return 0
 
-        total_faces = len(detected_faces)
+        return len(detected_faces)
 
+    def _search_collection_for_faces(self, image_data: bytes, source: str, total_faces: int) -> Optional[List[Dict[str, Any]]]:
+        """Search face collection for matches. Returns None on error."""
         try:
-            response = self._search_faces_by_image_with_retry(image_data, tolerance)
+            # Search with low threshold to get similarity scores even for non-matches
+            response = self._search_faces_by_image_with_retry(image_data, tolerance=1.0)
+            return response.get("FaceMatches", []) or None
         except ClientError as e:
             error = getattr(e, "response", {}).get("Error", {})
             code = error.get("Code", "Unknown")
             message = error.get("Message", str(e))
             self.logger.error(f"Error searching faces for {source}: {code}: {message}")
-            return [], total_faces
+            return None
         except Exception as e:
             self.logger.error(f"Error searching faces for {source}: {e}")
-            return [], total_faces
+            return None
 
-        matches: List[FaceMatch] = []
-        for match in response.get("FaceMatches", []):
-            similarity = match.get("Similarity", 0.0)
-            confidence = similarity / 100.0
-            matches.append(
-                FaceMatch(
-                    is_match=True,
-                    confidence=confidence,
-                    distance=1.0 - confidence,
-                    matched_encoding=None,
-                )
+    def _process_collection_matches(
+        self, face_matches: List[Dict[str, Any]], source: str, tolerance: float, total_faces: int
+    ) -> Tuple[List[FaceMatch], int]:
+        """Process face matches from collection search and return results."""
+        best_match = face_matches[0]
+        similarity = best_match.get("Similarity", 0.0)
+        face_info = best_match.get("Face", {})
+        external_id = face_info.get("ExternalImageId", "unknown")
+        confidence = similarity / 100.0
+        is_match = similarity >= tolerance
+
+        if is_match:
+            self.logger.info(f"  Match found: {source} -> {external_id} (similarity: {similarity:.1f}%)")
+        else:
+            self.logger.debug(
+                f"  Best match below threshold: {source} -> {external_id} "
+                f"(similarity: {similarity:.1f}%, threshold: {tolerance:.1f}%)"
             )
 
-        unique_matches = matches[:1] if matches else []
-        return unique_matches, total_faces
+        result = FaceMatch(
+            is_match=is_match,
+            confidence=confidence,
+            distance=1.0 - confidence,
+            matched_encoding=None,
+        )
+
+        return [result], total_faces
 
     @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES)
     def _compare_faces_with_retry(self, ref_image: bytes, image_data: bytes, tolerance: float) -> Dict[str, Any]:
