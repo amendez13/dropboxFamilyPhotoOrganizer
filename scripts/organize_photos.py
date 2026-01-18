@@ -237,7 +237,7 @@ def process_images(
     verbose_processing: bool,
     logger: logging.Logger,
     metrics_collector: Optional[MetricsCollector] = None,
-) -> Tuple[List[Dict[str, Any]], int, int, List[str]]:
+) -> Tuple[List[Dict[str, Any]], int, int, List[Dict[str, Any]]]:
     """
     Process images from Dropbox and find face matches.
 
@@ -288,24 +288,35 @@ def process_images(
             # Detect faces and check for matches
             face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
 
+            # Filter to only actual matches (is_match=True)
+            actual_matches = [m for m in face_matches if m.is_match]
+            # Get best similarity from all results (including non-matches) for logging
+            best_similarity = max((m.confidence * 100 for m in face_matches), default=0) if face_matches else 0
+
             # Record metrics if collector is available
             if metrics_collector:
                 has_faces = total_faces > 0
-                has_matches = len(face_matches) > 0
-                metrics_collector.record_face_detection(num_faces=total_faces, num_matches=len(face_matches))
+                has_matches = len(actual_matches) > 0
+                metrics_collector.record_face_detection(num_faces=total_faces, num_matches=len(actual_matches))
                 metrics_collector.record_image_processed(has_faces=has_faces, has_matches=has_matches)
 
-            if face_matches:
+            if actual_matches:
                 match_info = {
                     "file_path": file_path,
-                    "num_matches": len(face_matches),
+                    "num_matches": len(actual_matches),
                     "total_faces": total_faces,
-                    "matches": face_matches,
+                    "matches": actual_matches,
+                    "max_similarity": best_similarity,
                 }
                 matches.append(match_info)
-                logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
+                logger.info(f"✓ MATCH: {file_path} ({len(actual_matches)}/{total_faces} faces matched)")
             else:
-                no_match_paths.append(file_path)
+                no_match_info = {
+                    "file_path": file_path,
+                    "total_faces": total_faces,
+                    "best_similarity": best_similarity,
+                }
+                no_match_paths.append(no_match_info)
 
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
@@ -316,9 +327,79 @@ def process_images(
     return matches, processed, errors, no_match_paths
 
 
+def _log_matches_summary(matches: List[Dict[str, Any]], logger: logging.Logger) -> None:
+    """Log summary of matched images."""
+    if matches:
+        logger.info(f"Found {len(matches)} image(s) with matching faces:")
+        for match in matches:
+            similarity = match.get("max_similarity", 0)
+            logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched, {similarity:.1f}% similarity)")
+    else:
+        logger.info("No matching images found")
+
+
+def _log_no_match_item(item: Any, logger: logging.Logger) -> None:
+    """Log a single no-match item (handles both dict and string formats)."""
+    if isinstance(item, dict):
+        path = item["file_path"]
+        faces = item.get("total_faces", 0)
+        best_sim = item.get("best_similarity", 0)
+        if faces > 0 and best_sim > 0:
+            logger.info(f"  - {path} ({faces} face(s), best: {best_sim:.1f}%)")
+        elif faces > 0:
+            logger.info(f"  - {path} ({faces} face(s), no collection match)")
+        else:
+            logger.info(f"  - {path} (no faces detected)")
+    else:
+        logger.info(f"  - {item}")
+
+
+def _log_no_matches_summary(no_match_paths: List[Dict[str, Any]], logger: logging.Logger) -> None:
+    """Log summary of images with no matches."""
+    if no_match_paths:
+        logger.info(f"Found {len(no_match_paths)} image(s) with no matching faces:")
+        for item in no_match_paths:
+            _log_no_match_item(item, logger)
+
+
+def _execute_file_operations(
+    matches: List[Dict[str, Any]],
+    destination_folder: str,
+    dbx_client: DropboxClient,
+    operation: str,
+    logger: logging.Logger,
+) -> Tuple[int, int]:
+    """Execute copy/move operations on matched files. Returns (success_count, skipped_count)."""
+    success_count = 0
+    skipped_count = 0
+    processed_destinations: set[str] = set()
+
+    for match in matches:
+        source_path = match["file_path"]
+        filename = os.path.basename(source_path)
+        dest_path = os.path.join(destination_folder, filename)
+
+        if dest_path in processed_destinations:
+            skipped_count += 1
+            logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
+            continue
+
+        processed_destinations.add(dest_path)
+        log_entry = safe_organize(dbx_client, source_path, dest_path, operation)
+
+        if log_entry["success"]:
+            success_count += 1
+            past_tense = {"copy": "Copied", "move": "Moved"}.get(operation, operation.capitalize() + "d")
+            logger.info(f"✓ {past_tense}: {source_path} → {dest_path}")
+        else:
+            logger.error(f"✗ Failed to {operation}: {source_path}")
+
+    return success_count, skipped_count
+
+
 def perform_operations(
     matches: List[Dict[str, Any]],
-    no_match_paths: List[str],
+    no_match_paths: List[Dict[str, Any]],
     destination_folder: str,
     dbx_client: DropboxClient,
     operation: str,
@@ -344,17 +425,8 @@ def perform_operations(
     Returns:
         None. Results are logged via the logger parameter.
     """
-    if matches:
-        logger.info(f"Found {len(matches)} image(s) with matching faces:")
-        for match in matches:
-            logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
-    else:
-        logger.info("No matching images found")
-
-    if no_match_paths:
-        logger.info(f"Found {len(no_match_paths)} image(s) with no matching faces:")
-        for path in no_match_paths:
-            logger.info(f"  - {path}")
+    _log_matches_summary(matches, logger)
+    _log_no_matches_summary(no_match_paths, logger)
 
     if dry_run:
         logger.info("")
@@ -365,35 +437,9 @@ def perform_operations(
     logger.info("")
     logger.info(f"Performing {operation} operations...")
 
-    success_count = 0
-    skipped_count = 0
-    processed_destinations = set()
-
-    for match in matches:
-        source_path = match["file_path"]
-        # Generate destination path
-        filename = os.path.basename(source_path)
-        dest_path = os.path.join(destination_folder, filename)
-
-        # Skip if we've already processed this destination in this run
-        if dest_path in processed_destinations:
-            skipped_count += 1
-            logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
-            continue
-
-        processed_destinations.add(dest_path)
-        log_entry = safe_organize(dbx_client, source_path, dest_path, operation)
-
-        if log_entry["success"]:
-            success_count += 1
-            # Use proper past tense for the operation
-            past_tense = {"copy": "Copied", "move": "Moved"}.get(operation, operation.capitalize() + "d")
-            logger.info(f"✓ {past_tense}: {source_path} → {dest_path}")
-        else:
-            logger.error(f"✗ Failed to {operation}: {source_path}")
+    success_count, skipped_count = _execute_file_operations(matches, destination_folder, dbx_client, operation, logger)
 
     logger.info("")
-    # Use proper past tense for the operation
     past_tense = {"copy": "copied", "move": "moved"}.get(operation, operation + "d")
     logger.info(f"Successfully {past_tense} {success_count}/{len(matches)} file(s)")
     if skipped_count > 0:

@@ -1118,7 +1118,9 @@ class TestFindMatchesWithCollection:
         provider.client.search_faces_by_image.assert_called_once()
         call_kwargs = provider.client.search_faces_by_image.call_args[1]
         assert call_kwargs["CollectionId"] == "test-collection"
-        assert call_kwargs["FaceMatchThreshold"] == 85.0
+        # Code now searches with low threshold (1.0) to get similarity scores for all faces,
+        # then filters matches in code based on the actual tolerance
+        assert call_kwargs["FaceMatchThreshold"] == 1.0
         assert call_kwargs["MaxFaces"] == 3
 
     def test_find_matches_collection_missing_id(self, mock_aws_available, test_image_bytes):
