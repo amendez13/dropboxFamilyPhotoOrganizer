@@ -237,7 +237,11 @@ class TestProcessImages:
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
-        mock_provider.find_matches_in_image.return_value = ([{"confidence": 0.8}], 1)
+        # Create a mock FaceMatch object with is_match=True and confidence
+        mock_face_match = MagicMock()
+        mock_face_match.is_match = True
+        mock_face_match.confidence = 0.8
+        mock_provider.find_matches_in_image.return_value = ([mock_face_match], 1)
         mock_logger = Mock()
 
         # Mock file metadata
@@ -263,7 +267,11 @@ class TestProcessImages:
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
-        mock_provider.find_matches_in_image.return_value = ([{"confidence": 0.8}], 1)
+        # Create a mock FaceMatch object with is_match=True and confidence
+        mock_face_match = MagicMock()
+        mock_face_match.is_match = True
+        mock_face_match.confidence = 0.8
+        mock_provider.find_matches_in_image.return_value = ([mock_face_match], 1)
         mock_logger = Mock()
 
         # Mock multiple files
