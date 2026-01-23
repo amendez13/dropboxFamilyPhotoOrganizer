@@ -1,6 +1,7 @@
 """Unit tests for organize_photos script functions."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Generator
@@ -664,6 +665,43 @@ class TestGetReferencePhotos:
         assert len(photos) == 1
 
 
+class TestDateFiltering:
+    """Test date parsing and filtering helpers."""
+
+    def test_parse_date_value_valid(self, organize_photos_module: ModuleType) -> None:
+        result = organize_photos_module._parse_date_value("2026-01-03", "start_date")
+
+        assert result.isoformat() == "2026-01-03"
+
+    def test_parse_date_value_invalid(self, organize_photos_module: ModuleType) -> None:
+        with pytest.raises(ValueError):
+            organize_photos_module._parse_date_value("01-03-2026", "start_date")
+
+    def test_filter_files_by_date_inclusive(self, organize_photos_module: ModuleType) -> None:
+        mock_logger = Mock()
+
+        def make_file(date_str: str) -> Mock:
+            file_meta = Mock()
+            file_meta.client_modified = datetime.strptime(date_str, "%Y-%m-%d")
+            file_meta.server_modified = None
+            return file_meta
+
+        files = [
+            make_file("2026-01-02"),
+            make_file("2026-01-03"),
+            make_file("2026-01-07"),
+            make_file("2026-01-08"),
+        ]
+
+        start_date = organize_photos_module._parse_date_value("2026-01-03", "start_date")
+        end_date = organize_photos_module._parse_date_value("2026-01-07", "end_date")
+        filtered = organize_photos_module._filter_files_by_date(files, start_date, end_date, mock_logger)
+
+        assert len(filtered) == 2
+        assert filtered[0].client_modified.date().isoformat() == "2026-01-03"
+        assert filtered[1].client_modified.date().isoformat() == "2026-01-07"
+
+
 class TestValidateConfig:
     """Test _validate_config function."""
 
@@ -898,6 +936,8 @@ class TestMain:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         # Mock argparse
         mock_parser = Mock()
@@ -933,6 +973,8 @@ dropbox:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -958,6 +1000,8 @@ dropbox:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1003,6 +1047,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1060,6 +1106,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1118,6 +1166,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1179,6 +1229,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = str(tmp_path / "operations.log")
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1246,6 +1298,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = True  # Verbose mode
         mock_args.log_file = str(tmp_path / "operations.log")
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args

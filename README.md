@@ -136,6 +136,9 @@ processing:
   log_operations: true  # Enable audit logging
   dry_run: true
   batch_size: 50
+  date_range:
+    start: "2026-01-03"
+    end: "2026-01-07"
   image_extensions: [.jpg, .jpeg, .png, .heic]
 ```
 
@@ -158,6 +161,7 @@ processing:
 - **operation**: Operation mode - `copy` (default, safer) or `move` (destructive)
 - **log_operations**: If true, logs all operations to `operations.log`
 - **dry_run**: If true, lists matches without copying/moving files
+- **date_range**: Optional start/end dates (inclusive, `YYYY-MM-DD`) to limit which photos are processed
 
 ## Logging
 
@@ -249,6 +253,9 @@ python scripts/test_dropbox_connection.py
 ```bash
 # Dry run (preview matches without copying/moving)
 python scripts/organize_photos.py
+
+# Filter by date range (inclusive)
+python scripts/organize_photos.py --start-date 2026-01-03 --end-date 2026-01-07
 
 # Copy files (default, preserves originals)
 python scripts/organize_photos.py
