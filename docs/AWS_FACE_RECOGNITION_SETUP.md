@@ -508,6 +508,17 @@ Default AWS Rekognition quotas:
 1. **Use thumbnails**: Process 256×256 thumbnails instead of full images
 2. **Fewer reference photos**: 3-5 good photos often suffice
 3. **Filter by date**: Only process photos from specific date ranges
+   - In `config/config.yaml`:
+     ```yaml
+     processing:
+       date_range:
+         start: "2026-01-03"
+         end: "2026-01-07"
+     ```
+   - Or via CLI:
+     ```bash
+     python scripts/organize_photos.py --start-date 2026-01-03 --end-date 2026-01-07
+     ```
 4. **Cache results**: Don't reprocess already-matched photos
 5. **Batch processing**: Process photos in batches during off-peak hours
 6. **Monitor usage**: Check AWS Cost Explorer regularly

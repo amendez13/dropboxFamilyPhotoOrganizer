@@ -1,5 +1,6 @@
 # Config files with sensitive data
 config/config.yaml
+config/config.vps.yaml
 
 # Reference photos (both naming conventions)
 reference_photos/
@@ -45,6 +46,7 @@ ENV/
 *.swo
 
 # Logs
+logs/
 *.log
 
 # Test coverage

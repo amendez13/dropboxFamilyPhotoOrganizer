@@ -101,6 +101,11 @@ processing:
   # Enable dry run mode (list matches without copying/moving files)
   dry_run: true
 
+  # Optional: process only photos between these dates (inclusive)
+  # date_range:
+  #   start: "2026-01-03"
+  #   end: "2026-01-07"
+
   # Batch size for processing photos
   batch_size: 50
 
