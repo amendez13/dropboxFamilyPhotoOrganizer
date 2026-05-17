@@ -55,9 +55,7 @@ omit = [
     "scripts/check_account.py",
     "scripts/list_folders.py",
     "scripts/test_dropbox_connection.py",
-    # Cloud provider implementations (require external services)
-    "scripts/face_recognizer/providers/aws_provider.py",
-    "scripts/face_recognizer/providers/azure_provider.py",
+    "scripts/debug_dashboard.py",
 ]
 
 [tool.coverage.report]
