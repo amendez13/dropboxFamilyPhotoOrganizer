@@ -1,6 +1,7 @@
 """Unit tests for organize_photos script functions."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Generator
@@ -130,13 +131,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.warning.assert_called_with("Could not get thumbnail for /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
@@ -152,13 +154,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, True, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
+        assert no_match_paths == []
         mock_logger.warning.assert_called_with("Could not download full-size photo: /Photos/test.jpg")
         mock_provider.find_matches_in_image.assert_not_called()
 
@@ -175,14 +178,15 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
-        mock_logger.error.assert_called_with("Image processing error for /Photos/test.jpg: Disk error")
+        assert no_match_paths == []
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Disk error")
 
     def test_process_images_handles_value_errors(self, organize_photos_module: ModuleType) -> None:
         """Test that ValueError for invalid data is caught and logged."""
@@ -197,17 +201,18 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
-        mock_logger.warning.assert_called_with("Invalid image data for /Photos/test.jpg: Invalid image format")
+        assert no_match_paths == []
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Invalid image format")
 
     def test_process_images_handles_unexpected_exception(self, organize_photos_module: ModuleType) -> None:
-        """Test that unexpected exceptions are caught and logged with exc_info."""
+        """Test that unexpected exceptions are caught and logged."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
@@ -218,22 +223,26 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 1
         assert len(matches) == 0
-        # Check that error was logged with exc_info=True
-        mock_logger.error.assert_called_with("Unexpected error processing /Photos/test.jpg: Unexpected error", exc_info=True)
+        assert no_match_paths == []
+        mock_logger.error.assert_called_with("Error processing /Photos/test.jpg: Unexpected error")
 
     def test_process_images_returns_matches(self, organize_photos_module: ModuleType) -> None:
         """Test that face matches are correctly identified and returned."""
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
-        mock_provider.find_matches_in_image.return_value = ([{"confidence": 0.8}], 1)
+        # Create a mock FaceMatch object with is_match=True and confidence
+        mock_face_match = MagicMock()
+        mock_face_match.is_match = True
+        mock_face_match.confidence = 0.8
+        mock_provider.find_matches_in_image.return_value = ([mock_face_match], 1)
         mock_logger = Mock()
 
         # Mock file metadata
@@ -241,13 +250,14 @@ class TestProcessImages:
         mock_file.path_display = "/Photos/test.jpg"
         image_files = [mock_file]
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 1
         assert errors == 0
         assert len(matches) == 1
+        assert no_match_paths == []
         assert matches[0]["file_path"] == "/Photos/test.jpg"
         assert matches[0]["num_matches"] == 1
         assert matches[0]["total_faces"] == 1
@@ -258,7 +268,11 @@ class TestProcessImages:
         mock_dbx_client = MagicMock()
         mock_dbx_client.get_thumbnail.return_value = b"fake_thumbnail_data"
         mock_provider = MagicMock()
-        mock_provider.find_matches_in_image.return_value = ([{"confidence": 0.8}], 1)
+        # Create a mock FaceMatch object with is_match=True and confidence
+        mock_face_match = MagicMock()
+        mock_face_match.is_match = True
+        mock_face_match.confidence = 0.8
+        mock_provider.find_matches_in_image.return_value = ([mock_face_match], 1)
         mock_logger = Mock()
 
         # Mock multiple files
@@ -268,11 +282,12 @@ class TestProcessImages:
             mock_file.path_display = f"/Photos/test{i}.jpg"
             image_files.append(mock_file)
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, True, mock_logger
         )
 
         assert processed == 15
+        assert len(no_match_paths) == 0
         # In verbose mode, should log every file
         assert mock_logger.info.call_count >= 15  # At least one call per file plus summary
 
@@ -291,11 +306,12 @@ class TestProcessImages:
             mock_file.path_display = f"/Photos/test{i}.jpg"
             image_files.append(mock_file)
 
-        matches, processed, errors = organize_photos_module.process_images(
+        matches, processed, errors, no_match_paths = organize_photos_module.process_images(
             image_files, mock_dbx_client, mock_provider, {}, False, 0.6, False, mock_logger
         )
 
         assert processed == 25
+        assert len(no_match_paths) == 25
         # In non-verbose mode, progress is logged every 10th file (files 10, 20)
         # Plus 3 header lines = 5 info calls, much less than 25 files
         # Verify that "Processing X/25" appears only for files 10 and 20
@@ -322,7 +338,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         # Should only call copy_file once (second file has duplicate filename)
         assert mock_dbx_client.copy_file.call_count == 1
@@ -340,7 +356,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", True, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", True, mock_logger)
 
         # Should not call any file operations
         mock_dbx_client.copy_file.assert_not_called()
@@ -361,7 +377,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_dbx_client.copy_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Copied: /Photos/test.jpg → /Matches/test.jpg")
@@ -380,7 +396,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "move", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "move", False, mock_logger)
 
         mock_dbx_client.move_file.assert_called_once_with("/Photos/test.jpg", "/Matches/test.jpg")
         mock_logger.info.assert_any_call("✓ Moved: /Photos/test.jpg → /Matches/test.jpg")
@@ -399,7 +415,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.error.assert_called_with("✗ Failed to copy: /Photos/test.jpg")
 
@@ -418,7 +434,7 @@ class TestPerformOperations:
         ]
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("Successfully copied 2/2 file(s)")
 
@@ -430,7 +446,7 @@ class TestPerformOperations:
         matches = []
         destination_folder = "/Matches"
 
-        organize_photos_module.perform_operations(matches, destination_folder, mock_dbx_client, "copy", False, mock_logger)
+        organize_photos_module.perform_operations(matches, [], destination_folder, mock_dbx_client, "copy", False, mock_logger)
 
         mock_logger.info.assert_any_call("No matching images found")
         mock_dbx_client.copy_file.assert_not_called()
@@ -647,6 +663,43 @@ class TestGetReferencePhotos:
         photos = organize_photos_module._get_reference_photos(str(tmp_path), [".jpg", ".jpg"])
 
         assert len(photos) == 1
+
+
+class TestDateFiltering:
+    """Test date parsing and filtering helpers."""
+
+    def test_parse_date_value_valid(self, organize_photos_module: ModuleType) -> None:
+        result = organize_photos_module._parse_date_value("2026-01-03", "start_date")
+
+        assert result.isoformat() == "2026-01-03"
+
+    def test_parse_date_value_invalid(self, organize_photos_module: ModuleType) -> None:
+        with pytest.raises(ValueError):
+            organize_photos_module._parse_date_value("01-03-2026", "start_date")
+
+    def test_filter_files_by_date_inclusive(self, organize_photos_module: ModuleType) -> None:
+        mock_logger = Mock()
+
+        def make_file(date_str: str) -> Mock:
+            file_meta = Mock()
+            file_meta.client_modified = datetime.strptime(date_str, "%Y-%m-%d")
+            file_meta.server_modified = None
+            return file_meta
+
+        files = [
+            make_file("2026-01-02"),
+            make_file("2026-01-03"),
+            make_file("2026-01-07"),
+            make_file("2026-01-08"),
+        ]
+
+        start_date = organize_photos_module._parse_date_value("2026-01-03", "start_date")
+        end_date = organize_photos_module._parse_date_value("2026-01-07", "end_date")
+        filtered = organize_photos_module._filter_files_by_date(files, start_date, end_date, mock_logger)
+
+        assert len(filtered) == 2
+        assert filtered[0].client_modified.date().isoformat() == "2026-01-03"
+        assert filtered[1].client_modified.date().isoformat() == "2026-01-07"
 
 
 class TestValidateConfig:
@@ -883,6 +936,8 @@ class TestMain:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         # Mock argparse
         mock_parser = Mock()
@@ -918,6 +973,8 @@ dropbox:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -943,6 +1000,8 @@ dropbox:
         mock_args.dry_run = False
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -988,6 +1047,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1006,6 +1067,7 @@ processing:
 
         # Mock get_provider
         mock_provider = Mock()
+        mock_provider.use_face_collection = False
         organize_photos_module.get_provider = Mock(return_value=mock_provider)
 
         try:
@@ -1016,6 +1078,64 @@ processing:
             assert any("No reference photos found" in str(call) for call in mock_logger.error.call_args_list)
         finally:
             # Cleanup the mock
+            if "scripts.auth.client_factory" in sys.modules:
+                del sys.modules["scripts.auth.client_factory"]
+
+    def test_main_no_reference_photos_with_collection(self, organize_photos_module: ModuleType, tmp_path: Path) -> None:
+        """Test main uses face collection when no local reference photos exist."""
+        config_file = tmp_path / "config.yaml"
+        ref_photos_dir = tmp_path / "reference_photos"
+        ref_photos_dir.mkdir()
+
+        config_file.write_text(
+            f"""
+dropbox:
+  source_folder: /Photos/Source
+  destination_folder: /Photos/Dest
+face_recognition:
+  provider: aws
+  reference_photos_dir: {ref_photos_dir}
+processing:
+  dry_run: true
+"""
+        )
+
+        mock_args = Mock()
+        mock_args.config = str(config_file)
+        mock_args.move = False
+        mock_args.dry_run = True
+        mock_args.verbose = False
+        mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
+
+        mock_parser = Mock()
+        mock_parser.parse_args.return_value = mock_args
+        organize_photos_module.argparse.ArgumentParser = Mock(return_value=mock_parser)
+
+        organize_photos_module.setup_logging = Mock()
+        mock_logger = Mock()
+        organize_photos_module.get_logger = Mock(return_value=mock_logger)
+
+        mock_factory_class = Mock()
+        mock_client = Mock()
+        mock_client.list_folder_recursive.return_value = []
+        mock_factory_class.return_value.create_client.return_value = mock_client
+        sys.modules["scripts.auth.client_factory"] = Mock(DropboxClientFactory=mock_factory_class)
+
+        mock_provider = Mock()
+        mock_provider.use_face_collection = True
+        mock_provider.face_collection_id = "collection-1"
+        mock_provider.load_reference_photos.return_value = 2
+        organize_photos_module.get_provider = Mock(return_value=mock_provider)
+
+        try:
+            result = organize_photos_module.main()
+
+            assert result == 0
+            mock_provider.load_reference_photos.assert_called_once_with([])
+            assert any("collection-1" in str(call) for call in mock_logger.warning.call_args_list)
+        finally:
             if "scripts.auth.client_factory" in sys.modules:
                 del sys.modules["scripts.auth.client_factory"]
 
@@ -1046,6 +1166,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = "operations.log"
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1107,6 +1229,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = False
         mock_args.log_file = str(tmp_path / "operations.log")
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args
@@ -1174,6 +1298,8 @@ processing:
         mock_args.dry_run = True
         mock_args.verbose = True  # Verbose mode
         mock_args.log_file = str(tmp_path / "operations.log")
+        mock_args.start_date = None
+        mock_args.end_date = None
 
         mock_parser = Mock()
         mock_parser.parse_args.return_value = mock_args

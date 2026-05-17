@@ -9,7 +9,7 @@ Python-based tool to scan Dropbox directories for photos containing a specific p
 **Core workflow**: Access Dropbox → List photos recursively → Process with face detection → Copy/move matches to target directory.
 
 ## Constraints and Best Practices
-* This project is heavily documentation based in order to provide AI with proper context and aid human developers and watchers the ability to easily understand the detailes. So, if the task to be done does not provide a specific scope defined by a mention to a particular file or directory, then please read the flowing docs:
+* This project is heavily documentation based in order to provide AI with proper context and aid human developers and watchers the ability to easily understand the details. So, if the task to be done does not provide a specific scope defined by a mention to a particular file or directory, then please read the folowing docs:
    * README.md
    * docs/INDEX.md
 * Once you have read those docs, understand if you need further context from additional docs that are referenced in theser. If so read them as well.
