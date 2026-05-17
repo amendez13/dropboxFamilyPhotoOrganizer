@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, develop ]
   pull_request:
@@ -187,8 +188,8 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    # Run on PRs and main branch pushes when integration tests are enabled
-    if: vars.RUN_INTEGRATION_TESTS == 'true'
+    # Dropbox secrets are only available in trusted contexts.
+    if: vars.RUN_INTEGRATION_TESTS == 'true' && github.event_name != 'pull_request'
 
     steps:
     - name: Checkout code
