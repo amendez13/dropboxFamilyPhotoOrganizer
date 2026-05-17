@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
@@ -22,9 +22,45 @@ from scripts.dropbox_client import DropboxClient  # noqa: E402
 from scripts.face_recognizer import get_provider  # noqa: E402
 from scripts.face_recognizer.base_provider import BaseFaceRecognitionProvider  # noqa: E402
 from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
+from scripts.metrics import MetricsCollector  # noqa: E402
 
 # Global audit logger - initialized when setup_audit_logging is called
 _audit_logger: Optional[logging.Logger] = None
+
+
+def _init_metrics_for_provider(
+    provider: BaseFaceRecognitionProvider,
+    face_config: Dict[str, Any],
+    logger: logging.Logger,
+) -> Optional[MetricsCollector]:
+    """Initialize metrics collector for AWS provider."""
+    if provider.get_provider_name() != "aws":
+        return None
+
+    pricing_config = face_config.get("aws", {}).get("pricing", {})
+    metrics_collector = MetricsCollector(pricing_config=pricing_config)
+    metrics_collector.start_collection()
+
+    if hasattr(provider, "set_metrics_collector"):
+        provider.set_metrics_collector(metrics_collector)
+        logger.info("Metrics collection enabled for AWS provider")
+
+    return metrics_collector
+
+
+def _finalize_metrics(
+    metrics_collector: Optional[MetricsCollector],
+    logger: logging.Logger,
+) -> None:
+    """Finalize metrics collection and save to file."""
+    if not metrics_collector:
+        return
+
+    metrics_collector.end_collection()
+    logger.info("")
+    metrics_collector.log_summary(logger)
+    metrics_collector.save_to_file("logs/aws_metrics.json")
+    metrics_collector.append_to_monthly_costs("logs")
 
 
 def setup_audit_logging(log_file: str) -> logging.Logger:
@@ -200,7 +236,8 @@ def process_images(
     tolerance: float,
     verbose_processing: bool,
     logger: logging.Logger,
-) -> Tuple[List[Dict[str, Any]], int, int]:
+    metrics_collector: Optional[MetricsCollector] = None,
+) -> Tuple[List[Dict[str, Any]], int, int, List[Dict[str, Any]]]:
     """
     Process images from Dropbox and find face matches.
 
@@ -218,14 +255,16 @@ def process_images(
         logger: Logger instance for output
 
     Returns:
-        Tuple of (matches, processed, errors) where:
+        Tuple of (matches, processed, errors, no_match_paths) where:
         - matches: List of dicts with file_path, num_matches, total_faces, matches
         - processed: Total number of images processed
         - errors: Number of images that failed to process
+        - no_match_paths: List of file paths with no matches
     """
     matches = []
     processed = 0
     errors = 0
+    no_match_paths = []
 
     logger.info("=" * 70)
     logger.info("Processing images...")
@@ -249,31 +288,118 @@ def process_images(
             # Detect faces and check for matches
             face_matches, total_faces = provider.find_matches_in_image(image_data, source=file_path, tolerance=tolerance)
 
-            if face_matches:
+            # Filter to only actual matches (is_match=True)
+            actual_matches = [m for m in face_matches if m.is_match]
+            # Get best similarity from all results (including non-matches) for logging
+            best_similarity = max((m.confidence * 100 for m in face_matches), default=0) if face_matches else 0
+
+            # Record metrics if collector is available
+            if metrics_collector:
+                has_faces = total_faces > 0
+                has_matches = len(actual_matches) > 0
+                metrics_collector.record_face_detection(num_faces=total_faces, num_matches=len(actual_matches))
+                metrics_collector.record_image_processed(has_faces=has_faces, has_matches=has_matches)
+
+            if actual_matches:
                 match_info = {
                     "file_path": file_path,
-                    "num_matches": len(face_matches),
+                    "num_matches": len(actual_matches),
                     "total_faces": total_faces,
-                    "matches": face_matches,
+                    "matches": actual_matches,
+                    "max_similarity": best_similarity,
                 }
                 matches.append(match_info)
-                logger.info(f"✓ MATCH: {file_path} ({len(face_matches)}/{total_faces} faces matched)")
+                logger.info(f"✓ MATCH: {file_path} ({len(actual_matches)}/{total_faces} faces matched)")
+            else:
+                no_match_info = {
+                    "file_path": file_path,
+                    "total_faces": total_faces,
+                    "best_similarity": best_similarity,
+                }
+                no_match_paths.append(no_match_info)
 
-        except (OSError, IOError) as e:
-            logger.error(f"Image processing error for {file_path}: {e}")
-            errors += 1
-        except ValueError as e:
-            logger.warning(f"Invalid image data for {file_path}: {e}")
-            errors += 1
         except Exception as e:
-            logger.error(f"Unexpected error processing {file_path}: {e}", exc_info=True)
+            logger.error(f"Error processing {file_path}: {e}")
             errors += 1
+            if metrics_collector:
+                metrics_collector.record_image_error()
 
-    return matches, processed, errors
+    return matches, processed, errors, no_match_paths
+
+
+def _log_matches_summary(matches: List[Dict[str, Any]], logger: logging.Logger) -> None:
+    """Log summary of matched images."""
+    if matches:
+        logger.info(f"Found {len(matches)} image(s) with matching faces:")
+        for match in matches:
+            similarity = match.get("max_similarity", 0)
+            logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched, {similarity:.1f}% similarity)")
+    else:
+        logger.info("No matching images found")
+
+
+def _log_no_match_item(item: Any, logger: logging.Logger) -> None:
+    """Log a single no-match item (handles both dict and string formats)."""
+    if isinstance(item, dict):
+        path = item["file_path"]
+        faces = item.get("total_faces", 0)
+        best_sim = item.get("best_similarity", 0)
+        if faces > 0 and best_sim > 0:
+            logger.info(f"  - {path} ({faces} face(s), best: {best_sim:.1f}%)")
+        elif faces > 0:
+            logger.info(f"  - {path} ({faces} face(s), no collection match)")
+        else:
+            logger.info(f"  - {path} (no faces detected)")
+    else:
+        logger.info(f"  - {item}")
+
+
+def _log_no_matches_summary(no_match_paths: List[Dict[str, Any]], logger: logging.Logger) -> None:
+    """Log summary of images with no matches."""
+    if no_match_paths:
+        logger.info(f"Found {len(no_match_paths)} image(s) with no matching faces:")
+        for item in no_match_paths:
+            _log_no_match_item(item, logger)
+
+
+def _execute_file_operations(
+    matches: List[Dict[str, Any]],
+    destination_folder: str,
+    dbx_client: DropboxClient,
+    operation: str,
+    logger: logging.Logger,
+) -> Tuple[int, int]:
+    """Execute copy/move operations on matched files. Returns (success_count, skipped_count)."""
+    success_count = 0
+    skipped_count = 0
+    processed_destinations: set[str] = set()
+
+    for match in matches:
+        source_path = match["file_path"]
+        filename = os.path.basename(source_path)
+        dest_path = os.path.join(destination_folder, filename)
+
+        if dest_path in processed_destinations:
+            skipped_count += 1
+            logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
+            continue
+
+        processed_destinations.add(dest_path)
+        log_entry = safe_organize(dbx_client, source_path, dest_path, operation)
+
+        if log_entry["success"]:
+            success_count += 1
+            past_tense = {"copy": "Copied", "move": "Moved"}.get(operation, operation.capitalize() + "d")
+            logger.info(f"✓ {past_tense}: {source_path} → {dest_path}")
+        else:
+            logger.error(f"✗ Failed to {operation}: {source_path}")
+
+    return success_count, skipped_count
 
 
 def perform_operations(
     matches: List[Dict[str, Any]],
+    no_match_paths: List[Dict[str, Any]],
     destination_folder: str,
     dbx_client: DropboxClient,
     operation: str,
@@ -289,6 +415,7 @@ def perform_operations(
     Args:
         matches: List of match dicts from process_images(), each containing
                  file_path, num_matches, total_faces, and matches keys
+        no_match_paths: List of file paths that had no face matches
         destination_folder: Dropbox path where matched files will be copied/moved
         dbx_client: Initialized DropboxClient instance for file operations
         operation: Operation type - either 'copy' or 'move'
@@ -298,13 +425,8 @@ def perform_operations(
     Returns:
         None. Results are logged via the logger parameter.
     """
-    if not matches:
-        logger.info("No matching images found")
-        return
-
-    logger.info(f"Found {len(matches)} image(s) with matching faces:")
-    for match in matches:
-        logger.info(f"  - {match['file_path']} ({match['num_matches']} face(s) matched)")
+    _log_matches_summary(matches, logger)
+    _log_no_matches_summary(no_match_paths, logger)
 
     if dry_run:
         logger.info("")
@@ -315,35 +437,9 @@ def perform_operations(
     logger.info("")
     logger.info(f"Performing {operation} operations...")
 
-    success_count = 0
-    skipped_count = 0
-    processed_destinations = set()
-
-    for match in matches:
-        source_path = match["file_path"]
-        # Generate destination path
-        filename = os.path.basename(source_path)
-        dest_path = os.path.join(destination_folder, filename)
-
-        # Skip if we've already processed this destination in this run
-        if dest_path in processed_destinations:
-            skipped_count += 1
-            logger.info(f"⊘ Skipped (duplicate filename): {source_path}")
-            continue
-
-        processed_destinations.add(dest_path)
-        log_entry = safe_organize(dbx_client, source_path, dest_path, operation)
-
-        if log_entry["success"]:
-            success_count += 1
-            # Use proper past tense for the operation
-            past_tense = {"copy": "Copied", "move": "Moved"}.get(operation, operation.capitalize() + "d")
-            logger.info(f"✓ {past_tense}: {source_path} → {dest_path}")
-        else:
-            logger.error(f"✗ Failed to {operation}: {source_path}")
+    success_count, skipped_count = _execute_file_operations(matches, destination_folder, dbx_client, operation, logger)
 
     logger.info("")
-    # Use proper past tense for the operation
     past_tense = {"copy": "copied", "move": "moved"}.get(operation, operation + "d")
     logger.info(f"Successfully {past_tense} {success_count}/{len(matches)} file(s)")
     if skipped_count > 0:
@@ -372,6 +468,48 @@ def _get_reference_photos(reference_photos_dir: str, image_extensions: List[str]
     return reference_photos
 
 
+def _parse_date_value(value: Optional[str], field_name: str) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as e:
+        raise ValueError(f"Invalid {field_name} date '{value}'. Use YYYY-MM-DD.") from e
+
+
+def _filter_files_by_date(
+    image_files: List[FileMetadata],
+    start_date: Optional[date],
+    end_date: Optional[date],
+    logger: logging.Logger,
+) -> List[FileMetadata]:
+    if not start_date and not end_date:
+        return image_files
+
+    filtered = []
+    skipped_unknown = 0
+    for entry in image_files:
+        modified = entry.client_modified or entry.server_modified
+        if not modified:
+            skipped_unknown += 1
+            continue
+
+        file_date = modified.date()
+        if start_date and file_date < start_date:
+            continue
+        if end_date and file_date > end_date:
+            continue
+        filtered.append(entry)
+
+    start_label = start_date.isoformat() if start_date else "any"
+    end_label = end_date.isoformat() if end_date else "any"
+    logger.info(f"Date filter: {start_label} to {end_label} (inclusive) -> {len(filtered)}/{len(image_files)} files")
+    if skipped_unknown:
+        logger.warning(f"Skipped {skipped_unknown} file(s) with missing modification dates")
+
+    return filtered
+
+
 def _validate_config(
     config: Dict[str, Any], logger: logging.Logger
 ) -> Tuple[Dict[str, Any], Any, Any, Dict[str, Any], Dict[str, Any]]:
@@ -396,6 +534,45 @@ def _validate_config(
     return dropbox_config, source_folder, destination_folder, face_config, processing
 
 
+def _resolve_date_range(
+    args: argparse.Namespace,
+    processing: Dict[str, Any],
+) -> Tuple[Optional[date], Optional[date]]:
+    date_range = processing.get("date_range", {})
+    start_date = _parse_date_value(args.start_date or date_range.get("start"), "start_date")
+    end_date = _parse_date_value(args.end_date or date_range.get("end"), "end_date")
+    if start_date and end_date and start_date > end_date:
+        raise ValueError("start_date must be on or before end_date")
+    return start_date, end_date
+
+
+def _log_date_range(start_date: Optional[date], end_date: Optional[date], logger: logging.Logger) -> None:
+    if not start_date and not end_date:
+        return
+    start_label = start_date.isoformat() if start_date else "any"
+    end_label = end_date.isoformat() if end_date else "any"
+    logger.info(f"Date range filter: {start_label} to {end_label} (inclusive)")
+
+
+def _list_image_files(
+    dbx_client: DropboxClient,
+    source_folder: str,
+    destination_folder: str,
+    image_extensions: List[str],
+    start_date: Optional[date],
+    end_date: Optional[date],
+    logger: logging.Logger,
+) -> List[FileMetadata]:
+    files = list(dbx_client.list_folder_recursive(source_folder))
+    image_files = [
+        f
+        for f in files
+        if any(f.path_lower.endswith(ext.lower()) for ext in image_extensions)
+        and not f.path_lower.startswith(destination_folder.lower())
+    ]
+    return _filter_files_by_date(image_files, start_date, end_date, logger)
+
+
 def _setup_face_provider(face_config: Dict[str, Any], tolerance: float, logger: logging.Logger) -> BaseFaceRecognitionProvider:
     """
     Initialize and configure the face recognition provider.
@@ -410,13 +587,16 @@ def _setup_face_provider(face_config: Dict[str, Any], tolerance: float, logger: 
     recognition_config = local_config.get("recognition", {})
     recognition_num_jitters = recognition_config.get("num_jitters", local_config.get("num_jitters", 1))
 
-    # Build config for provider with recognition parameters
-    provider_config = {
-        "model": local_config.get("model", "hog"),
-        "encoding_model": local_config.get("encoding_model", "large"),
-        "num_jitters": recognition_num_jitters,
-        "tolerance": tolerance,
-    }
+    # Build config for provider: start with provider-specific config, then add common settings
+    provider_config = dict(local_config)  # Copy all provider-specific settings (e.g., AWS collection config)
+    provider_config.update(
+        {
+            "model": local_config.get("model", "hog"),
+            "encoding_model": local_config.get("encoding_model", "large"),
+            "num_jitters": recognition_num_jitters,
+            "tolerance": tolerance,
+        }
+    )
 
     logger.info(f"  Detection model: {provider_config['model']}")
     logger.info(f"  Encoding model: {provider_config['encoding_model']}")
@@ -455,6 +635,8 @@ def main() -> int:
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--log-file", default="operations.log", help="Path to operations log file (default: operations.log)")
+    parser.add_argument("--start-date", help="Start date (inclusive) in YYYY-MM-DD format")
+    parser.add_argument("--end-date", help="End date (inclusive) in YYYY-MM-DD format")
 
     args = parser.parse_args()
 
@@ -477,6 +659,7 @@ def main() -> int:
         image_extensions = processing.get("image_extensions", [".jpg", ".jpeg", ".png", ".heic"])
         verbose_processing = processing.get("verbose", False)
         use_full_size = processing.get("use_full_size_photos", False)
+        start_date, end_date = _resolve_date_range(args, processing)
 
         # Determine operation mode (CLI flag takes precedence)
         if args.move:
@@ -499,6 +682,7 @@ def main() -> int:
         logger.info(f"Source folder: {source_folder}")
         logger.info(f"Destination folder: {destination_folder}")
         logger.info(f"Log file: {log_file if log_file else 'disabled'}")
+        _log_date_range(start_date, end_date, logger)
 
         # Initialize Dropbox client using OAuth
         logger.info("Connecting to Dropbox...")
@@ -512,30 +696,40 @@ def main() -> int:
         # Initialize face recognition provider
         provider = _setup_face_provider(face_config, tolerance, logger)
 
+        # Initialize metrics collector for AWS provider
+        metrics_collector = _init_metrics_for_provider(provider, face_config, logger)
+
         # Load reference photos
         logger.info(f"Loading reference photos from {reference_photos_dir}...")
         reference_photos = _get_reference_photos(reference_photos_dir, image_extensions)
 
         if not reference_photos:
-            logger.error(f"No reference photos found in {reference_photos_dir}")
-            logger.error("Please add reference photos and run scripts/train_face_model.py first")
-            return 1
-
-        num_faces = provider.load_reference_photos(reference_photos)
-        logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
+            if getattr(provider, "use_face_collection", False):
+                num_faces = provider.load_reference_photos([])
+                collection_id = getattr(provider, "face_collection_id", "unknown")
+                logger.warning(
+                    f"No local reference photos found; using AWS face collection '{collection_id}' "
+                    f"with {num_faces} face(s)"
+                )
+            else:
+                logger.error(f"No reference photos found in {reference_photos_dir}")
+                logger.error("Please add reference photos and run scripts/train_face_model.py first")
+                return 1
+        else:
+            num_faces = provider.load_reference_photos(reference_photos)
+            logger.info(f"✓ Loaded {num_faces} reference face encoding(s)")
 
         # List files in source folder
         logger.info(f"Scanning {source_folder} for photos...")
-        files = list(dbx_client.list_folder_recursive(source_folder))
-
-        # Filter for image files, excluding destination folder
-        image_files = [
-            f
-            for f in files
-            if any(f.path_lower.endswith(ext.lower()) for ext in image_extensions)
-            and not f.path_lower.startswith(destination_folder.lower())
-        ]
-
+        image_files = _list_image_files(
+            dbx_client,
+            source_folder,
+            destination_folder,
+            image_extensions,
+            start_date,
+            end_date,
+            logger,
+        )
         logger.info(f"Found {len(image_files)} image file(s) to process")
 
         if len(image_files) == 0:
@@ -543,8 +737,16 @@ def main() -> int:
             return 0
 
         # Process images
-        matches, processed, errors = process_images(
-            image_files, dbx_client, provider, face_config, use_full_size, tolerance, verbose_processing, logger
+        matches, processed, errors, no_match_paths = process_images(
+            image_files,
+            dbx_client,
+            provider,
+            face_config,
+            use_full_size,
+            tolerance,
+            verbose_processing,
+            logger,
+            metrics_collector,
         )
 
         # Print summary
@@ -560,7 +762,10 @@ def main() -> int:
         _setup_audit_logger_if_enabled(log_file, logger)
 
         # Perform operations
-        perform_operations(matches, destination_folder, dbx_client, operation, dry_run, logger)
+        perform_operations(matches, no_match_paths, destination_folder, dbx_client, operation, dry_run, logger)
+
+        # Output metrics summary and save to file (AWS provider only)
+        _finalize_metrics(metrics_collector, logger)
 
         return 0
 

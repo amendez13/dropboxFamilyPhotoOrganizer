@@ -46,6 +46,23 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - First training run with reference photos
 - Parameter tuning and troubleshooting
 
+**[AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md)**
+- Azure Face API provider setup
+- Creating an Azure account and Face API resource
+- Getting API keys and endpoints
+- Python dependency installation
+- Configuration and Person Groups
+- API usage, costs, and rate limits
+- Security and privacy considerations
+
+**[AWS_FACE_RECOGNITION_SETUP.md](AWS_FACE_RECOGNITION_SETUP.md)**
+- AWS Rekognition provider setup
+- Creating an AWS account and IAM user
+- IAM policy configuration with minimum permissions
+- Three credential options (config file, AWS CLI, IAM roles)
+- API usage, costs, and rate limits
+- Troubleshooting and security best practices
+
 ---
 
 ## Architecture
@@ -78,6 +95,10 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 - Running CI checks locally
 - Troubleshooting CI failures
 - Best practices for development
+
+**[DEBUG_DASHBOARD.md](DEBUG_DASHBOARD.md)**
+- Local web dashboard for reviewing AWS match results
+- How to run and configure the dashboard
 
 **[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)**
 - Branch protection rules for main branch
@@ -117,10 +138,13 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [README.md](../README.md) | Getting started, installation, usage | All users |
 | [DROPBOX_SETUP.md](DROPBOX_SETUP.md) | Dropbox API configuration | All users |
 | [FACE_RECOGNITION_LOCAL_SETUP.md](FACE_RECOGNITION_LOCAL_SETUP.md) | Local face recognition setup | All users |
+| [AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md) | Azure Face API setup | All users |
+| [AWS_FACE_RECOGNITION_SETUP.md](AWS_FACE_RECOGNITION_SETUP.md) | AWS Rekognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
+| [DEBUG_DASHBOARD.md](DEBUG_DASHBOARD.md) | Local debug dashboard usage | Developers |
 
 ---
 

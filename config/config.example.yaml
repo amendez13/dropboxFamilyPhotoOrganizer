@@ -56,13 +56,32 @@ face_recognition:
     recognition:
       num_jitters: 1   # 1-10 for speed when processing Dropbox photos
 
-  # AWS Rekognition settings (only needed if provider is 'aws')
+  # AWS Rekognition Provider
   aws:
-    # AWS credentials (optional if using AWS CLI configuration)
-    # aws_access_key_id: "YOUR_AWS_ACCESS_KEY"
-    # aws_secret_access_key: "YOUR_AWS_SECRET_KEY"
+    # AWS credentials (optional if using AWS CLI or IAM role)
+    # aws_access_key_id: "YOUR_ACCESS_KEY"
+    # aws_secret_access_key: "YOUR_SECRET_KEY"
     aws_region: "us-east-1"
-    similarity_threshold: 80.0  # Percentage (0-100)
+    similarity_threshold: 80.0  # 0-100 percentage
+    # Optional: store reference faces in a collection to avoid re-indexing each run
+    # use_face_collection: false
+    # face_collection_id: "family-collection"
+    # collection_create_if_missing: true
+    # collection_skip_existing: true
+    # collection_max_faces: 5  # Max matches returned per search (higher = more API cost)
+
+    # Pricing configuration for cost estimation (optional)
+    # Update these values based on your AWS region pricing
+    # See: https://aws.amazon.com/rekognition/pricing/
+    pricing:
+      currency: "USD"
+      detect_faces_per_1000: 1.0         # DetectFaces API: $1.00 per 1,000 images
+      compare_faces_per_1000: 1.0        # CompareFaces API: $1.00 per 1,000 images
+      search_faces_per_1000: 6.0         # SearchFacesByImage API: $6.00 per 1,000 images
+      index_faces_per_1000: 1.0          # IndexFaces API: $1.00 per 1,000 images
+      list_faces_per_1000: 0.0           # ListFaces API: Free
+      describe_collection_per_1000: 0.0  # DescribeCollection API: Free
+      create_collection_per_1000: 0.0    # CreateCollection API: Free
 
   # Azure Face API settings (only needed if provider is 'azure')
   azure:
@@ -81,6 +100,11 @@ processing:
 
   # Enable dry run mode (list matches without copying/moving files)
   dry_run: true
+
+  # Optional: process only photos between these dates (inclusive)
+  # date_range:
+  #   start: "2026-01-03"
+  #   end: "2026-01-07"
 
   # Batch size for processing photos
   batch_size: 50
