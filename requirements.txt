@@ -1,6 +1,6 @@
 # Core dependencies
 dropbox>=11.36.0
-PyYAML>=6.0
+PyYAML>=6.0.3
 python-dateutil>=2.8.0
 numpy>=1.21.0
 
