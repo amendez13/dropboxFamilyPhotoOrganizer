@@ -67,6 +67,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+#### Python 3.10 and NumPy compatibility
+
+The project currently supports Python 3.10 in CI. NumPy 2.3 and newer require
+Python 3.11+, so the base NumPy lower bound in `requirements.txt` must stay
+below 2.3 while Python 3.10 remains supported. Do not accept Dependabot bumps
+that raise the NumPy lower bound to 2.3 or 2.4 unless the Python 3.10 CI job is
+removed or the supported Python floor is raised.
+
 ### 3. Configure the Application
 
 ```bash
