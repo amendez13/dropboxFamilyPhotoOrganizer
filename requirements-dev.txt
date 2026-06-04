@@ -15,7 +15,7 @@ mypy>=2.1.0
 types-PyYAML>=2024.1.0
 
 # Security
-bandit>=1.7.5
+bandit>=1.9.4
 pip-audit>=2.7.0
 
 # Pre-commit hooks
