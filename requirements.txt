@@ -8,7 +8,7 @@ python-dateutil>=2.9.0.post0
 numpy>=1.21.0
 
 # Secure credential storage (recommended for OAuth tokens)
-keyring>=24.0.0
+keyring>=25.7.0
 
 # Image processing (required for all providers)
 Pillow>=12.2.0
