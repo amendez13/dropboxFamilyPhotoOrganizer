@@ -7,7 +7,7 @@
 # For the local face recognition provider (default), these are not required.
 
 # Azure Cognitive Services Face API client
-azure-cognitiveservices-vision-face>=0.6.0
+azure-cognitiveservices-vision-face>=0.6.1
 
 # Azure REST authentication
 msrest>=0.7.0
