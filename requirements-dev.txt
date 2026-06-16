@@ -16,7 +16,7 @@ types-PyYAML>=2024.1.0
 
 # Security
 bandit>=1.9.4
-pip-audit>=2.7.0
+pip-audit>=2.10.1
 
 # Pre-commit hooks
 pre-commit>=3.6.0
