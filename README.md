@@ -67,13 +67,10 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-#### Python 3.10 and NumPy compatibility
+#### Python version
 
-The project currently supports Python 3.10 in CI. NumPy 2.3 and newer require
-Python 3.11+, so the base NumPy lower bound in `requirements.txt` must stay
-below 2.3 while Python 3.10 remains supported. Do not accept Dependabot bumps
-that raise the NumPy lower bound to 2.3 or 2.4 unless the Python 3.10 CI job is
-removed or the supported Python floor is raised.
+The project targets **Python 3.12** (CI and runtime). Earlier 3.10/3.11 support
+was dropped, so NumPy and other dependencies can track their latest releases.
 
 ### 3. Configure the Application
 
@@ -424,7 +421,7 @@ This project uses GitHub Actions for continuous integration. The CI pipeline run
 - Type checking (mypy)
 
 **Testing**
-- Unit tests across Python 3.10, 3.11, and 3.12
+- Unit tests on Python 3.12
 - Code coverage reporting
 
 **Security**
