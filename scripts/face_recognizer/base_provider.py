@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import numpy.typing as npt
 
 
 @dataclass
 class FaceEncoding:
     """Represents a face encoding with metadata."""
 
-    encoding: np.ndarray
+    encoding: npt.NDArray[np.float64]
     source: str  # Source file path or identifier
     confidence: Optional[float] = None
     bounding_box: Optional[Tuple[int, int, int, int]] = None  # (top, right, bottom, left)
