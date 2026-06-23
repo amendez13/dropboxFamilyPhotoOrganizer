@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 def test_python_version():
     """Test that we're running on a supported Python version."""
-    assert sys.version_info >= (3, 10), "Python 3.10 or higher is required"
+    assert sys.version_info >= (3, 12), "Python 3.12 or higher is required"
 
 
 def test_imports():

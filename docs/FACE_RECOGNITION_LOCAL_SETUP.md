@@ -34,7 +34,7 @@ The `face_recognition` library is built on top of dlib, which requires several s
 
 ### Required Software
 
-1. **Python 3.7 or higher**
+1. **Python 3.12 or higher**
    ```bash
    python3 --version
    ```
