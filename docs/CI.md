@@ -18,14 +18,13 @@ Location: `.github/workflows/ci.yml`
 
 ### CI Jobs
 
-The pipeline consists of 6 independent jobs that run in parallel:
+The pipeline consists of these jobs:
 
-1. **Lint and Code Quality**
-2. **Testing** (matrix across Python versions)
-3. **Coverage Check** (non-voting)
-4. **Security Checks**
-5. **Configuration Validation**
-6. **Build Status Check** (runs after all other jobs)
+1. **Lint and Code Quality** (includes config/YAML validation)
+2. **Testing** (Python 3.12, with 95% coverage enforcement)
+3. **Security Checks**
+4. **Integration Tests** (conditional — `main` pushes with `RUN_INTEGRATION_TESTS=true`)
+5. **Build Status Check** (runs after lint, test, security)
 
 ## Job Details
 
@@ -53,6 +52,10 @@ flake8 scripts/ --count --exit-zero --max-complexity=10
 
 # Type checking (mypy)
 mypy scripts/ --ignore-missing-imports
+
+# Config validation (folded in from the former validate-config job)
+python -c "import yaml; yaml.safe_load(open('config/config.example.yaml'))"
+find scripts -name '*.py' -exec python -m py_compile {} +
 ```
 
 **Configuration Files:**
@@ -65,8 +68,6 @@ mypy scripts/ --ignore-missing-imports
 Runs the test suite across multiple Python versions to ensure compatibility.
 
 **Test Matrix:**
-- Python 3.10
-- Python 3.11
 - Python 3.12
 
 **Tools Used:**
@@ -76,11 +77,12 @@ Runs the test suite across multiple Python versions to ensure compatibility.
 
 **Commands:**
 ```bash
-# Run tests with coverage
-pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
+# Run tests with coverage and enforce the 95% gate (coverage is now part of test)
+pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-report=xml --cov-fail-under=95
 
 # Upload coverage to Codecov (Python 3.12 only)
 # Requires CODECOV_TOKEN secret to be configured
+# The HTML report is uploaded as a 14-day artifact
 ```
 
 **Test Configuration:**
@@ -94,9 +96,9 @@ pytest tests/ -v --cov=scripts --cov-report=xml --cov-report=term-missing
   - Dependency import checks
   - Configuration file validation
 
-### 3. Coverage Check (Voting)
+### 3. Coverage (enforced inside the Test job)
 
-Monitors code coverage with a 95% target. This check is **voting** - builds will fail if coverage is below the threshold.
+Coverage is no longer a separate job — the **Test** job runs pytest with `--cov-fail-under=95`, so a coverage regression fails the test job directly (and therefore the build).
 
 **Target:** 95% code coverage
 
@@ -105,12 +107,6 @@ Monitors code coverage with a 95% target. This check is **voting** - builds will
 **Tools Used:**
 - **pytest-cov** - Coverage measurement
 - **coverage.py** - Coverage reporting
-
-**Commands:**
-```bash
-# Run tests with coverage and fail if below threshold
-pytest tests/ -v --cov=scripts --cov-report=term-missing --cov-report=html --cov-fail-under=95
-```
 
 **Configuration:**
 Located in `pyproject.toml` under `[tool.coverage.run]` and `[tool.coverage.report]`
@@ -177,24 +173,10 @@ pip-audit --requirement requirements.txt
 - Always include a brief justification in the comment
 - Example: `token_access_type="offline",  # nosec B106 - Request refresh token`
 
-### 5. Configuration Validation
+> **Configuration validation** (YAML validity + `py_compile` syntax) used to be a
+> standalone `validate-config` job. It is now a step inside **Lint and Code Quality**.
 
-Validates configuration files and Python syntax.
-
-**Checks:**
-1. **YAML Validation** - Ensures `config/config.example.yaml` is valid YAML
-2. **Python Syntax** - Validates all Python files compile correctly
-
-**Commands:**
-```bash
-# Validate YAML
-python -c "import yaml; yaml.safe_load(open('config/config.example.yaml'))"
-
-# Check Python syntax
-python -m py_compile scripts/**/*.py
-```
-
-### 6. Integration Tests
+### 5. Integration Tests
 
 Tests actual Dropbox API connectivity using GitHub Secrets.
 
@@ -212,16 +194,16 @@ Tests actual Dropbox API connectivity using GitHub Secrets.
 **Configuration Required:**
 See [GitHub Secrets Setup](#github-secrets-setup) section below for configuration instructions.
 
-### 7. Build Status Check
+### 6. Build Status Check
 
 Final job that verifies all required checks passed.
 
-**Dependencies:** lint, test, security, validate-config
+**Dependencies:** lint, test, security
 
 **Behavior:**
 - ✅ Passes if all dependent jobs succeed
 - ❌ Fails if any required job fails (including security checks)
-- ⚠️ Coverage check is non-voting and does not affect build status
+- Coverage (95% gate) is enforced inside the test job, so a coverage regression fails `test` and therefore this check
 
 ## Configuration Files
 
@@ -277,7 +259,7 @@ addopts = ["--verbose", "--strict-markers", "--disable-warnings"]
 **mypy Settings:**
 ```toml
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 ignore_missing_imports = true
 ```
@@ -365,7 +347,7 @@ bandit -r scripts/ -ll
 pip-audit --requirement requirements.txt
 ```
 
-### Validate Configuration
+### Config validation (runs as a step in the Lint job)
 
 ```bash
 # Validate YAML

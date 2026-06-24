@@ -4,7 +4,6 @@
     "contexts": [
       "Lint and Code Quality",
       "Test Python 3.12",
-      "Validate Configuration",
       "CI Status Check"
     ]
   },
