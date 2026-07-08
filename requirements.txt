@@ -8,7 +8,7 @@ numpy>=1.21.0
 keyring>=25.7.0
 
 # Image processing (required for all providers)
-Pillow>=12.2.0
+Pillow>=12.3.0
 
 # ======================================================================
 # Face Recognition Providers (install based on your chosen provider)
