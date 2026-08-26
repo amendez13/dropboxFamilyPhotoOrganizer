@@ -78,6 +78,35 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 
 ---
 
+## Planning and Architecture
+
+**[PYTHON_SETUP_SUMMARY.md](planning/PYTHON_SETUP_SUMMARY.md)**
+- Executive summary of Python application setup proposal
+- Current issues and proposed solutions
+- Implementation plan and timeline
+- Risk assessment and success criteria
+
+**[PYTHON_APPLICATION_SETUP_PROPOSAL.md](planning/PYTHON_APPLICATION_SETUP_PROPOSAL.md)**
+- Detailed technical proposal for proper Python package structure
+- Current state analysis and identified issues
+- Comprehensive migration strategy with phases
+- Backward compatibility considerations
+- Alternative approaches and implementation risks
+
+**[STRUCTURE_COMPARISON.md](planning/STRUCTURE_COMPARISON.md)**
+- Visual before/after comparison of directory structure
+- Import pattern changes and examples
+- CLI usage changes
+- Benefits summary and migration complexity analysis
+
+**[TASK_MANAGEMENT.md](planning/TASK_MANAGEMENT.md)**
+- Development workflow and task tracking
+- Issue management guidelines
+- Code organization principles
+- Testing and quality standards
+
+---
+
 ## Developer Resources
 
 **[CLAUDE.md](../CLAUDE.md)**
@@ -141,6 +170,10 @@ Welcome to the Dropbox Family Photo Organizer documentation. This index provides
 | [AZURE_FACE_RECOGNITION_SETUP.md](AZURE_FACE_RECOGNITION_SETUP.md) | Azure Face API setup | All users |
 | [AWS_FACE_RECOGNITION_SETUP.md](AWS_FACE_RECOGNITION_SETUP.md) | AWS Rekognition setup | All users |
 | [FACE_RECOGNITION_ARCHITECTURE.md](FACE_RECOGNITION_ARCHITECTURE.md) | Technical architecture and design | Developers |
+| [PYTHON_SETUP_SUMMARY.md](planning/PYTHON_SETUP_SUMMARY.md) | Python package setup proposal summary | Developers |
+| [PYTHON_APPLICATION_SETUP_PROPOSAL.md](planning/PYTHON_APPLICATION_SETUP_PROPOSAL.md) | Detailed Python package setup proposal | Developers |
+| [STRUCTURE_COMPARISON.md](planning/STRUCTURE_COMPARISON.md) | Visual structure comparison | Developers |
+| [TASK_MANAGEMENT.md](planning/TASK_MANAGEMENT.md) | Development workflow and task tracking | Developers |
 | [CI.md](CI.md) | CI/CD pipeline and development workflow | Developers |
 | [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Branch protection configuration | Developers |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guidance | Claude Code |
