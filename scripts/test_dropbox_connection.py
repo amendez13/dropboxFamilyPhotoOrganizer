@@ -91,8 +91,14 @@ def _test_thumbnail(client: DropboxClient, source_folder: str, image_extensions:
 
 def main() -> None:
     """Test Dropbox connection and list files."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Test Dropbox connection and configuration")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    args = parser.parse_args()
+
     # Setup logging
-    setup_logging()
+    setup_logging(args.verbose)
     logger = get_logger(__name__)
 
     print("=" * 60)

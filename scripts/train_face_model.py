@@ -13,6 +13,7 @@ Usage:
     python scripts/train_face_model.py
 """
 
+import argparse
 import glob
 import os
 import sys
@@ -26,8 +27,13 @@ import yaml  # noqa: E402
 from scripts.face_recognizer.providers.local_provider import LocalFaceRecognitionProvider  # noqa: E402
 from scripts.logging_utils import get_logger, setup_logging  # noqa: E402
 
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Train face recognition model")
+parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+args = parser.parse_args()
+
 # Setup logging
-setup_logging()
+setup_logging(args.verbose)
 logger = get_logger(__name__)
 
 
