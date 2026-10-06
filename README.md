@@ -396,6 +396,9 @@ These hooks will automatically:
 # Install development dependencies
 pip install -r requirements-dev.txt
 
+# Include the AWS provider dependencies to match the CI test environment
+pip install -r requirements-aws.txt
+
 # Run tests
 pytest tests/ -v
 
