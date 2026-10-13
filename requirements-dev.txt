@@ -7,7 +7,7 @@ pytest-cov>=7.1.0
 pytest-mock>=3.16.0
 
 # Code quality
-black>=26.5.1
+black>=26.10.1
 isort>=9.0.2
 flake8>=7.3.0
 pylint>=4.1.1
